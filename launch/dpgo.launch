@@ -1,11 +1,19 @@
 <launch>
+  <!-- 机器人名字，作为命名空间名称 -->
   <arg name="robot_name"              default="sobek" />
+  <!-- 数据集名字，no use -->
   <arg name="dataset_name"            default="Euroc" />
+  <!-- config文件存储目录，BUG? -->
   <arg name="robot_names_config"      default="robot_names"/>
+  <!-- 日志级别（疑似） -->
   <arg name="verbosity"               default="0" />
+  <!-- 机器人id，一般用于区分存储路径 -->
   <arg name="robot_id"                default="0" />
+  <!-- 机器人个数 -->
   <arg name="num_robots"              default="1" />
+  <!-- 是否使用模拟时间？，no use -->
   <arg name="should_use_sim_time"     default="false"/>
+  <!-- DEBUG模式 -->
   <arg name="debug"                   default="false"/>
 
   <!-- True if multiple ROS masters are running. This turns on reliable UDP. -->
@@ -27,15 +35,19 @@
     <!-- Launch dpgo_ros -->
     <include file="$(find dpgo_ros)/launch/PGOAgent.launch">
       <arg name="agent_id"                         value="$(arg robot_id)" />
+      <!-- 机器人个数 -->
       <arg name="num_robots"                       value="$(arg num_robots)" />
       <arg name="robot_names_file"                 value="$(find kimera_distributed)/params/$(arg robot_names_config).yaml" />
+      <!-- DEBUG模式 -->
       <arg name="debug"                            value="$(arg debug)" />
+      <!-- 日志级别（疑似） -->
       <arg name="verbose"                          value="true" />
       <arg name="publish_iterate"                  value="false"/>
       <arg name="acceleration"                     value="false" />
       <arg name="update_rule"                      value="RoundRobin"/>
       <arg name="local_initialization_method"      value="Odometry"/>
       <arg name="multirobot_initialization"        value="true"/>
+      <!-- 设置RTR优化参数（非异步） -->
       <arg name="RTR_iterations"                   value="3" />
       <arg name="RTR_tCG_iterations"               value="50" />
       <arg name="RTR_gradnorm_tol"                 value="$(arg RTR_gradnorm_tol)" />
@@ -58,6 +70,7 @@
       <arg name="synchronize_measurements"         value="$(arg synchronize_measurements)" />
       <arg name="visualize_loop_closures"          value="false" />
       <arg name="enable_recovery"                  value="false" />
+      <!-- 日志导出目录 -->
       <arg name="log_directory"                    value="$(arg log_output_path)/" />
     </include> 
 
