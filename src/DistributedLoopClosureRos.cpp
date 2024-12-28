@@ -703,19 +703,28 @@ void DistributedLoopClosureRos::initializeLoopPublishers() {
   }
 }
 
+// 发布排队等待处理的回环闭合
 void DistributedLoopClosureRos::publishQueuedLoops() {
+  // 初始化一个map来记录每个机器人的队列大小
   std::map<lcd::RobotId, size_t> robot_queue_sizes;
+  // 初始化一个map来存储每个机器人的回环消息
   std::map<lcd::RobotId, pose_graph_tools_msgs::LoopClosures> msg_map;
+  // 迭代器指向子图回环队列的起始位置
   auto it = submap_loop_closures_queue_.begin();
+  // 初始化 other_robot 以标识参与回环的另一个机器人
   lcd::RobotId other_robot = 0;
+  // 遍历子图回环队列
   while (it != submap_loop_closures_queue_.end()) {
+    // 获取当前回环的边 ID 和因子
     const lcd::EdgeID& edge_id = it->first;
     const auto& factor = it->second;
+    // 确定参与回环的另一个机器人的 ID
     if (edge_id.robot_src == config_.my_id_) {
       other_robot = edge_id.robot_dst;
     } else {
       other_robot = edge_id.robot_src;
     }
+    // 如果这是同一个机器人的回环闭合，直接将其添加到子图回环中并从队列中移除
     if (other_robot == config_.my_id_) {
       // This is a intra-robot loop closure and no need to synchronize
       submap_loop_closures_.add(factor);
@@ -729,7 +738,9 @@ void DistributedLoopClosureRos::publishQueuedLoops() {
         msg.destination_robot_id = other_robot;
         msg_map[other_robot] = msg;
       }
+      // 增加当前机器人的队列大小
       robot_queue_sizes[other_robot]++;
+      // 如果当前机器人消息中的边数小于批量大小，将边添加到消息中
       if (msg_map[other_robot].edges.size() < config_.loop_batch_size_) {
         pose_graph_tools_msgs::PoseGraphEdge edge_msg;
         edge_msg.robot_from = edge_id.robot_src;
@@ -740,6 +751,7 @@ void DistributedLoopClosureRos::publishQueuedLoops() {
         // TODO: write covariance
         msg_map[other_robot].edges.push_back(edge_msg);
       }
+      // 移动迭代器到下一个项目
       ++it;
     }
   }
@@ -747,14 +759,17 @@ void DistributedLoopClosureRos::publishQueuedLoops() {
   // Select the connected robot with largest queue size to synchronize
   lcd::RobotId selected_robot_id = 0;
   size_t selected_queue_size = 0;
+  // 遍历 robot_queue_sizes 以找到队列大小最大且已连接的机器人
   for (auto& it : robot_queue_sizes) {
     lcd::RobotId robot_id = it.first;
     size_t queue_size = it.second;
+    // 如果当前机器人已连接且其队列大小大于或等于选定的队列大小，更新选定的机器人
     if (robot_connected_[robot_id] && queue_size >= selected_queue_size) {
       selected_robot_id = robot_id;
       selected_queue_size = queue_size;
     }
   }
+  // 如果选定的队列大小大于 0，发布选定机器人的回环
   if (selected_queue_size > 0) {
     ROS_WARN("Published %zu loops to robot %zu.",
              msg_map[selected_robot_id].edges.size(),

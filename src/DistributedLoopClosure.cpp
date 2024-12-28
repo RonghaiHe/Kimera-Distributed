@@ -120,6 +120,9 @@ void DistributedLoopClosure::processBow(
   }
 }
 
+// Processes the local pose graph to update the submap atlas
+// This function handles the parsing of odometry edges and loop closure edges, creating
+// new keyframes in one submap_atlas and updating the submap loop closures
 bool DistributedLoopClosure::processLocalPoseGraph(
     const pose_graph_tools_msgs::PoseGraph::ConstPtr& msg) {
   // Parse odometry edges and create new keyframes in the submap atlas
@@ -132,6 +135,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
     // Start submap critical section
     // std::unique_lock<std::mutex> submap_lock(submap_atlas_mutex_);
 
+    // Initialize the first pose from the first node's orientation and position
     gtsam::Rot3 init_rotation(msg->nodes[0].pose.orientation.w,
                               msg->nodes[0].pose.orientation.x,
                               msg->nodes[0].pose.orientation.y,
@@ -146,6 +150,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
       T_world_dpgo_ = init_pose;
     }
 
+    // Create the first keyframe in the submap atlas
     submap_atlas_->createKeyframe(0, init_pose, ts);
     logOdometryPose(
         gtsam::Symbol(robot_id_to_prefix.at(config_.my_id_), 0), init_pose, ts);
@@ -159,6 +164,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
   }
 
   for (const auto& pg_edge : msg->edges) {
+    // An edge represents **odometry** data from the same robot
     if (pg_edge.robot_from == config_.my_id_ && pg_edge.robot_to == config_.my_id_ &&
         pg_edge.type == pose_graph_tools_msgs::PoseGraphEdge::ODOM) {
       int frame_src = (int)pg_edge.key_from;
@@ -194,6 +200,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
     } else if (pg_edge.robot_from == config_.my_id_ &&
                pg_edge.robot_to == config_.my_id_ &&
                pg_edge.type == pose_graph_tools_msgs::PoseGraphEdge::LOOPCLOSE) {
+      // Collect local loop closures
       local_loop_closures.push_back(pg_edge);
     }
   }
@@ -311,7 +318,7 @@ void DistributedLoopClosure::savePosesToFile(const std::string& filename,
 }
 
 void DistributedLoopClosure::saveSortedPosesToFile(const std::string& filename,
-                                             const gtsam::Values& nodes) const {
+                                                   const gtsam::Values& nodes) const {
   std::ofstream file;
   file.open(filename);
   if (!file.is_open()) {
@@ -341,7 +348,7 @@ void DistributedLoopClosure::saveSortedPosesToFile(const std::string& filename,
     file << quat.x() << " ";
     file << quat.y() << " ";
     file << quat.z() << " ";
-    file << quat.w() << "\n";    
+    file << quat.w() << "\n";
   }
   file.close();
 }
@@ -594,22 +601,34 @@ void DistributedLoopClosure::queryFramesPublish(
   }
 }
 
+// 检测回环闭合，通过处理Bag-of-Words (BoW)消息
+// 该函数尝试对每个BoW消息进行回环检测，直到达到预设的批处理大小限制
 void DistributedLoopClosure::detectLoopSpin() {
+  // 锁定以确保对BoW消息的线程安全访问
   std::unique_lock<std::mutex> bow_lock(bow_msgs_mutex_);
+  // 遍历BoW消息的迭代器
   auto it = bow_msgs_.begin();
+  // 跟踪已执行的回环检测数量的计数器
   int num_detection_performed = 0;
 
+  // 继续处理，直到检测次数未达到批处理大小限制
   while (num_detection_performed < config_.detection_batch_size_) {
+    // 如果没有更多消息，退出循环
     if (it == bow_msgs_.end()) {
       break;
     }
+    // 提取当前的BoW消息
     const pose_graph_tools_msgs::BowQuery msg = *it;
+    // 从消息中解析机器人和姿态ID
     lcd::RobotId query_robot = msg.robot_id;
     lcd::PoseId query_pose = msg.pose_id;
+    // 将机器人和姿态ID组合成一个查询顶点
     lcd::RobotPoseId query_vertex(query_robot, query_pose);
+    // 初始化BoW向量，并将消息的BoW向量转换为适当的格式
     DBoW2::BowVector bow_vec;
     kimera_multi_lcd::BowVectorFromMsg(msg.bow_vector, &bow_vec);
 
+    // 如果查询的姿态ID太小，无法进行回环检测；添加BoW向量并移除该消息
     if (query_pose <= 2 * config_.bow_skip_num_) {
       // We cannot detect loop for the very first few frames
       // Remove and proceed to next message
@@ -630,6 +649,7 @@ void DistributedLoopClosure::detectLoopSpin() {
       detectLoop(query_vertex, bow_vec);
       num_detection_performed++;
       // Inter-robot queries will count as communication payloads
+      // XXX Maybe this if can be removed?
       if (query_robot != config_.my_id_) {
         received_bow_bytes_.push_back(
             kimera_multi_lcd::computeBowQueryPayloadBytes(msg));
@@ -644,6 +664,15 @@ void DistributedLoopClosure::detectLoopSpin() {
   //}
 }
 
+/**
+ * 检测给定机器人姿态的回环。
+ *
+ * 此函数尝试基于给定的机器人姿态（vertex_query）及其词袋向量（bow_vec）检测回环。
+ * 它将输入的姿态与数据库中的其他姿态进行比较，以找到潜在的回环边，并将其添加到候选列表中以供进一步处理。
+ *
+ * @param vertex_query 要查询回环的机器人姿态ID。
+ * @param bow_vec 与查询姿态关联的词袋向量。
+ */
 void DistributedLoopClosure::detectLoop(const lcd::RobotPoseId& vertex_query,
                                         const DBoW2::BowVector& bow_vec) {
   const lcd::RobotId robot_query = vertex_query.first;
@@ -672,6 +701,7 @@ void DistributedLoopClosure::detectLoop(const lcd::RobotPoseId& vertex_query,
 
     // Incoming bow vector is from another robot
     // Detect loop closures ONLY with my trajectory
+    // XXX else
     if (robot_query != config_.my_id_) {
       if (lcd_->detectLoopWithRobot(
               config_.my_id_, vertex_query, bow_vec, &vertex_matches, &match_scores)) {
@@ -802,6 +832,10 @@ void DistributedLoopClosure::verifyLoopSpin() {
   }
 }
 
+// 获取子图级别的pose graph
+// 此函数根据是否增量更新的标志，返回机器人子图之间的相对pose graph
+// 如果是增量更新，仅返回自上次获取以来的新回环和子图
+// 如果不是增量更新，返回所有回环和子图
 pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
     bool incremental) {
   // Start submap critical section
@@ -809,21 +843,28 @@ pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
   // Fill in submap-level loop closures
   pose_graph_tools_msgs::PoseGraph out_graph;
 
+  // 如果子图地图为空，返回空的图
   if (submap_atlas_->numSubmaps() == 0) {
     return out_graph;
   }
 
+  // 如果是增量更新
   if (incremental) {
+    // 获取新的回环
     gtsam::NonlinearFactorGraph new_loop_closures(
         submap_loop_closures_.begin() + last_get_lc_idx_, submap_loop_closures_.end());
+    // 将新的回环转换为 ROS 消息格式
     out_graph = GtsamGraphToRos(new_loop_closures, gtsam::Values());
+    // 更新最后获取回环的索引
     last_get_lc_idx_ = submap_loop_closures_.size();
   } else {
+    // 获取所有回环
     out_graph = GtsamGraphToRos(submap_loop_closures_, gtsam::Values());
   }
   const std::string robot_name = config_.robot_names_.at(config_.my_id_);
 
   // Fill in submap-level odometry
+  // 遍历每个子图，填充子图之间的里程计边
   size_t start_idx = incremental ? last_get_submap_idx_ : 0;
   size_t end_idx = submap_atlas_->numSubmaps() - 1;
   for (int submap_id = start_idx; submap_id < end_idx; ++submap_id) {
@@ -860,6 +901,7 @@ pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
     out_graph.header.frame_id = config_.frame_id_;
   }
 
+  // 如果是增量更新，更新最后获取子图的索引
   if (incremental) {
     last_get_submap_idx_ = end_idx;
   }
@@ -895,6 +937,11 @@ void DistributedLoopClosure::processInternalVLC(
   }
 }
 
+/**
+ * 更新候选回环列表，并返回仍缺少VLC帧的候选总数。
+ *
+ * @return 仍缺少VLC帧的候选总数
+ */
 size_t DistributedLoopClosure::updateCandidateList() {
   // return total number of candidates still missing VLC frames
   size_t total_candidates = 0;
@@ -903,21 +950,28 @@ size_t DistributedLoopClosure::updateCandidateList() {
   vlc_backlog_ = 0;
   // start candidate list critical section
   std::unique_lock<std::mutex> candidate_lock(candidate_lc_mutex_);
+  // 遍历每个机器人的候选回环列表
+  // Type of `robot_queue`: [size_t, std::vector<lcd::PotentialVLCEdge>]
   for (const auto& robot_queue : candidate_lc_) {
     // Create new vector of candidates still missing VLC frames
     std::vector<lcd::PotentialVLCEdge> unresolved_candidates;
+    // 遍历每个候选，检查所需的VLC帧是否可用
     for (const auto& candidate : robot_queue.second) {
+      // 如果候选的源帧不存在，增加VLC的backlog计数器
       if (!lcd_->frameExists(candidate.vertex_src_)) {
         vlc_backlog_++;
       }
+      // 如果候选的目标帧不存在，增加VLC的backlog计数器
       if (!lcd_->frameExists(candidate.vertex_dst_)) {
         vlc_backlog_++;
       }
+      // 如果候选的两个帧都存在，将其加入队列进行回环验证，并增加已准备好候选计数器
       if (lcd_->frameExists(candidate.vertex_src_) &&
           lcd_->frameExists(candidate.vertex_dst_)) {
         queued_lc_.push(candidate);
         ready_candidates++;
       } else {
+        // 如果候选的帧不全存在，将其加入未解决候选列表，并增加总候选计数器
         unresolved_candidates.push_back(candidate);
         total_candidates++;
       }
