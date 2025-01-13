@@ -5,7 +5,6 @@
  */
 
 #include "kimera_distributed/DistributedLoopClosureRos.h"
-#include "kimera_distributed/configs.h"
 
 #include <DBoW2/DBoW2.h>
 #include <glog/logging.h>
@@ -23,6 +22,8 @@
 #include <memory>
 #include <random>
 #include <string>
+
+#include "kimera_distributed/configs.h"
 
 namespace kimera_distributed {
 
@@ -218,11 +219,13 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
 
   std::string resp_topic =
       "/" + config_.robot_names_[config_.my_id_] + "/kimera_distributed/vlc_responses";
-  vlc_responses_pub_ = nh_.advertise<pose_graph_tools_msgs::VLCFrames>(resp_topic, 10, true);
+  vlc_responses_pub_ =
+      nh_.advertise<pose_graph_tools_msgs::VLCFrames>(resp_topic, 10, true);
 
   std::string req_topic =
       "/" + config_.robot_names_[config_.my_id_] + "/kimera_distributed/vlc_requests";
-  vlc_requests_pub_ = nh_.advertise<pose_graph_tools_msgs::VLCRequests>(req_topic, 10, true);
+  vlc_requests_pub_ =
+      nh_.advertise<pose_graph_tools_msgs::VLCRequests>(req_topic, 10, true);
 
   std::string loop_topic =
       "/" + config_.robot_names_[config_.my_id_] + "/kimera_distributed/loop_closures";
@@ -351,7 +354,8 @@ void DistributedLoopClosureRos::localPoseGraphCallback(
   bool incremental_pub = processLocalPoseGraph(msg);
 
   // Publish sparsified pose graph
-  pose_graph_tools_msgs::PoseGraph sparse_pose_graph = getSubmapPoseGraph(incremental_pub);
+  pose_graph_tools_msgs::PoseGraph sparse_pose_graph =
+      getSubmapPoseGraph(incremental_pub);
   if (!sparse_pose_graph.edges.empty() || !sparse_pose_graph.nodes.empty()) {
     pose_graph_pub_.publish(sparse_pose_graph);
   }
@@ -382,7 +386,8 @@ void DistributedLoopClosureRos::dpgoCallback(const nav_msgs::PathConstPtr& msg) 
     int elapsed_sec = int(elapsed_time.toSec());
     std::string file_path = config_.log_output_dir_ + "kimera_distributed_poses_" +
                             std::to_string(elapsed_sec) + ".csv";
-    std::string file_path_tum = config_.log_output_dir_ + "kimera_distributed_poses_tum_" +
+    std::string file_path_tum = config_.log_output_dir_ +
+                                "kimera_distributed_poses_tum_" +
                             std::to_string(elapsed_sec) + ".csv";
     // savePosesToFile(file_path, *nodes_ptr);
     saveSortedPosesToFile(file_path_tum, *nodes_ptr);
@@ -432,7 +437,8 @@ void DistributedLoopClosureRos::logTimerCallback(const ros::TimerEvent& event) {
     int elapsed_sec = int(elapsed_time.toSec());
     std::string file_path = config_.log_output_dir_ + "kimera_distributed_poses_" +
                             std::to_string(elapsed_sec) + ".csv";
-    std::string file_path_tum = config_.log_output_dir_ + "kimera_distributed_poses_tum_" +
+    std::string file_path_tum = config_.log_output_dir_ +
+                                "kimera_distributed_poses_tum_" +
                             std::to_string(elapsed_sec) + ".tum";
     gtsam::Values::shared_ptr nodes_ptr(new gtsam::Values);
     computePosesInWorldFrame(nodes_ptr);
@@ -458,7 +464,6 @@ void DistributedLoopClosureRos::publishOdomToWorld() {
   const gtsam::Pose3 T_world_odom = getOdomInWorldFrame();
   GtsamPoseToRosTf(T_world_odom, &tf_world_odom.transform);
   tf_broadcaster_.sendTransform(tf_world_odom);
-  
 }
 
 void DistributedLoopClosureRos::publishLatestKFToWorld() {

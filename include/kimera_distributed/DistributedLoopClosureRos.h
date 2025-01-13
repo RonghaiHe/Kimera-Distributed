@@ -6,8 +6,18 @@
 
 #pragma once
 
+#include <pose_graph_tools_msgs/BowQueries.h>
+#include <pose_graph_tools_msgs/BowRequests.h>
+#include <pose_graph_tools_msgs/LoopClosures.h>
+#include <pose_graph_tools_msgs/LoopClosuresAck.h>
+#include <pose_graph_tools_msgs/PoseGraph.h>
+#include <pose_graph_tools_msgs/PoseGraphQuery.h>
+#include <pose_graph_tools_msgs/VLCFrames.h>
+#include <pose_graph_tools_msgs/VLCRequests.h>
 #include <ros/ros.h>
 #include <ros/time.h>
+#include <std_msgs/UInt16MultiArray.h>
+#include <tf/transform_broadcaster.h>
 
 #include <iostream>
 #include <map>
@@ -19,18 +29,6 @@
 
 #include "kimera_distributed/DistributedLoopClosure.h"
 #include "kimera_distributed/utils.h"
-
-#include <pose_graph_tools_msgs/BowQueries.h>
-#include <pose_graph_tools_msgs/BowRequests.h>
-#include <pose_graph_tools_msgs/LoopClosures.h>
-#include <pose_graph_tools_msgs/LoopClosuresAck.h>
-#include <pose_graph_tools_msgs/PoseGraph.h>
-#include <pose_graph_tools_msgs/PoseGraphQuery.h>
-#include <pose_graph_tools_msgs/VLCFrames.h>
-#include <pose_graph_tools_msgs/VLCRequests.h>
-#include <std_msgs/UInt16MultiArray.h>
-
-#include <tf/transform_broadcaster.h>
 
 namespace lcd = kimera_multi_lcd;
 
@@ -191,7 +189,8 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
    * @param response
    * @return
    */
-  bool requestPoseGraphCallback(pose_graph_tools_msgs::PoseGraphQuery::Request& request,
+  bool requestPoseGraphCallback(
+      pose_graph_tools_msgs::PoseGraphQuery::Request& request,
                                 pose_graph_tools_msgs::PoseGraphQuery::Response& response);
 
   /**
