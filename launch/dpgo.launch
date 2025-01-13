@@ -5,6 +5,7 @@
   <arg name="verbosity"               default="0" />
   <arg name="robot_id"                default="0" />
   <arg name="num_robots"              default="1" />
+  <arg name="random_seed"             default="42" />
   <arg name="should_use_sim_time"     default="false"/>
   <arg name="debug"                   default="false"/>
 
@@ -28,6 +29,7 @@
     <include file="$(find dpgo_ros)/launch/PGOAgent.launch">
       <arg name="agent_id"                         value="$(arg robot_id)" />
       <arg name="num_robots"                       value="$(arg num_robots)" />
+      <arg name="random_seed"                      value="$(arg random_seed)" />
       <arg name="robot_names_file"                 value="$(find kimera_distributed)/params/$(arg robot_names_config).yaml" />
       <arg name="debug"                            value="$(arg debug)" />
       <arg name="verbose"                          value="true" />

@@ -40,6 +40,10 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
   config.my_id_ = my_id_int;
   config.num_robots_ = num_robots_int;
 
+  // Add random seed parameter, default to 42
+  ros::param::get("~random_seed", seed_);
+  rng_.seed(seed_);
+
   // Path to log outputs
   config.log_output_ = ros::param::get("~log_output_path", config.log_output_dir_);
   ros::param::get("~run_offline", config.run_offline_);
@@ -70,6 +74,7 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
                   config.lcd_params_.lcd_tp_params_.min_temporal_matches_);
 
   // Geometric verification params
+  ros::param::get("~ransac_randomize", config.lcd_params_.ransac_randomize_);
   ros::param::get("~ransac_threshold_mono", config.lcd_params_.ransac_threshold_mono_);
   ros::param::get("~ransac_inlier_percentage_mono",
                   config.lcd_params_.ransac_inlier_percentage_mono_);
@@ -388,7 +393,7 @@ void DistributedLoopClosureRos::dpgoCallback(const nav_msgs::PathConstPtr& msg) 
                             std::to_string(elapsed_sec) + ".csv";
     std::string file_path_tum = config_.log_output_dir_ +
                                 "kimera_distributed_poses_tum_" +
-                            std::to_string(elapsed_sec) + ".csv";
+                                std::to_string(elapsed_sec) + ".csv";
     // savePosesToFile(file_path, *nodes_ptr);
     saveSortedPosesToFile(file_path_tum, *nodes_ptr);
   }
@@ -439,7 +444,7 @@ void DistributedLoopClosureRos::logTimerCallback(const ros::TimerEvent& event) {
                             std::to_string(elapsed_sec) + ".csv";
     std::string file_path_tum = config_.log_output_dir_ +
                                 "kimera_distributed_poses_tum_" +
-                            std::to_string(elapsed_sec) + ".tum";
+                                std::to_string(elapsed_sec) + ".tum";
     gtsam::Values::shared_ptr nodes_ptr(new gtsam::Values);
     computePosesInWorldFrame(nodes_ptr);
     // savePosesToFile(file_path, *nodes_ptr);
@@ -537,11 +542,11 @@ void DistributedLoopClosureRos::runComms() {
       publishQueuedLoops();
 
       // Generate a random sleep time
-      std::random_device rd;
-      std::mt19937 gen(rd());
+      // std::random_device rd;
+      // std::mt19937 gen(rd());
       std::uniform_real_distribution<double> distribution(
           0.5 * config_.loop_sync_sleep_time_, 1.5 * config_.loop_sync_sleep_time_);
-      double sleep_time = distribution(gen);
+      double sleep_time = distribution(rng_);
       next_loop_sync_time_ += ros::Duration(sleep_time);
     }
 
@@ -1034,10 +1039,10 @@ void DistributedLoopClosureRos::randomSleep(double min_sec, double max_sec) {
   CHECK(min_sec < max_sec);
   CHECK(min_sec > 0);
   if (max_sec < 1e-3) return;
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  // std::random_device rd;
+  // std::mt19937 gen(rd());
   std::uniform_real_distribution<double> distribution(min_sec, max_sec);
-  double sleep_time = distribution(gen);
+  double sleep_time = distribution(rng_);
   // ROS_INFO("Sleep %f sec...", sleep_time);
   ros::Duration(sleep_time).sleep();
 }

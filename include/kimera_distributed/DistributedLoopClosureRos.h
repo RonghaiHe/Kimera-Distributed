@@ -85,7 +85,10 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
   std::string latest_kf_frame_id_;
   std::string odom_frame_id_;
   std::string world_frame_id_;
-  
+
+  // Random variables
+  std::mt19937 rng_;  // Random number generator
+  int seed_ = 42;     // Seed for random number generator
 
   /**
    * @brief Run place recognition / loop detection spin
@@ -191,7 +194,7 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
    */
   bool requestPoseGraphCallback(
       pose_graph_tools_msgs::PoseGraphQuery::Request& request,
-                                pose_graph_tools_msgs::PoseGraphQuery::Response& response);
+      pose_graph_tools_msgs::PoseGraphQuery::Response& response);
 
   /**
    * Initialize loop closures
@@ -256,7 +259,7 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
    * @brief Publish TF between world and odom
    */
   void publishOdomToWorld();
-  
+
   /**
    * @brief Publish TF between world and latest keyframe
    */
