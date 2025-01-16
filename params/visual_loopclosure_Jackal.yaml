@@ -15,6 +15,7 @@ max_nrFrames_between_islands: 3
 max_nrFrames_between_queries: 2
 
 # Mono RANSAC 
+ransac_inlier_mono_count: 10
 ransac_threshold_mono: 0.00001
 ransac_inlier_percentage_mono: 0.01
 max_ransac_iterations_mono: 1000

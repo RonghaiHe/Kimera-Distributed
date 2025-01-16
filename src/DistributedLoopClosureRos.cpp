@@ -78,6 +78,8 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
   ros::param::get("~ransac_threshold_mono", config.lcd_params_.ransac_threshold_mono_);
   ros::param::get("~ransac_inlier_percentage_mono",
                   config.lcd_params_.ransac_inlier_percentage_mono_);
+  ros::param::get("~ransac_inlier_mono_count",
+                  config.lcd_params_.ransac_inlier_mono_count_);
   ros::param::get("~max_ransac_iterations_mono",
                   config.lcd_params_.max_ransac_iterations_mono_);
   ros::param::get("~lowe_ratio", config.lcd_params_.lowe_ratio_);
