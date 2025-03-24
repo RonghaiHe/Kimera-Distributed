@@ -1,0 +1,19 @@
+<launch>
+	<arg name="bagfile"   default="/home/yunchang/data/kimera.bag"/>
+	<arg name="output_ns" default="sobek" />
+	<arg name="rate"      default="1.0"   />
+
+	<node pkg="rosbag" type="play" name="player_$(arg output_ns)" output="screen" 
+		args="$(arg bagfile) --clock -r $(arg rate) -s0.1 --topics
+		/imu0
+		/cam0/image_raw
+		/cam1/image_raw
+		/tf_static
+		/tf_aggregate">
+
+		<remap from="/imu0"           to="/$(arg output_ns)/imu0"/>
+		<remap from="/cam0/image_raw" to="/$(arg output_ns)/cam0/image_raw"/>
+		<remap from="/cam1/image_raw" to="/$(arg output_ns)/cam1/image_raw"/>
+	</node> 
+
+</launch>
