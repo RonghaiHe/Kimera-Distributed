@@ -1,0 +1,22 @@
+<launch>
+	<arg name="bagfile"   default="/home/dataset/s3e/v1_campus_road.bag"/>
+	<arg name="rate"      default="1.0"   />
+	<arg name="publish_clock" default="false" />
+	<arg name="clock_arg" value="--clock" if="$(arg publish_clock)" />
+	<arg name="clock_arg" value="" unless="$(arg publish_clock)" />
+
+	<node pkg="rosbag" type="play" name="player_$(arg output_ns)" output="screen" 
+		args="$(arg bagfile) $(arg clock_arg) -r $(arg rate) -s0.1 --topics
+		/Alpha/imu/data
+		/Alpha/left_camera/compressed
+		/Alpha/right_camera/compressed
+		/Bob/imu/data
+		/Bob/left_camera/compressed
+		/Bob/right_camera/compressed
+		/Carol/imu/data
+		/Carol/left_camera/compressed
+		/Carol/right_camera/compressed
+		">
+	</node> 
+
+</launch>
