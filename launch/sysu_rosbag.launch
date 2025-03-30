@@ -8,16 +8,15 @@
 
 	<node pkg="rosbag" type="play" name="player_$(arg robot_name)" output="screen" 
 		args="$(arg bagfile) $(arg clock_arg) -r $(arg rate) -s0.1 --topics
-		/$(arg robot_name)/camera/color/camera_info
-		/$(arg robot_name)/camera/color/image_raw/compressed
-		/$(arg robot_name)/camera/aligned_depth_to_color/camera_info
-		/$(arg robot_name)/camera/aligned_depth_to_color/image_raw/compressed
 		/$(arg robot_name)/camera/imu
-		/$(arg robot_name)/camera/infra1/camera_info
 		/$(arg robot_name)/camera/infra1/image_rect_raw/compressed
-		/$(arg robot_name)/camera/infra2/camera_info
 		/$(arg robot_name)/camera/infra2/image_rect_raw/compressed
 		/$(arg robot_name)/nlink_linktrack_nodeframe2">
 	</node> 
-
+		<!-- /$(arg robot_name)/camera/infra1/camera_info
+		/$(arg robot_name)/camera/infra2/camera_info
+		/$(arg robot_name)/camera/color/camera_info
+		/$(arg robot_name)/camera/color/image_raw/compressed
+		/$(arg robot_name)/camera/aligned_depth_to_color/camera_info
+		/$(arg robot_name)/camera/aligned_depth_to_color/image_raw/compressed -->
 </launch>
