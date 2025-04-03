@@ -126,6 +126,7 @@ void DistributedLoopClosure::processBow(
 bool DistributedLoopClosure::processLocalPoseGraph(
     const pose_graph_tools_msgs::PoseGraph::ConstPtr& msg) {
   // Parse odometry edges and create new keyframes in the submap atlas
+  // 解析里程计边并在子图集中创建新的关键帧
   std::vector<pose_graph_tools_msgs::PoseGraphEdge> local_loop_closures;
   const uint64_t ts = msg->header.stamp.toNSec();
 
@@ -136,6 +137,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
     // std::unique_lock<std::mutex> submap_lock(submap_atlas_mutex_);
 
     // Initialize the first pose from the first node's orientation and position
+    // 从第一个节点的方向和位置初始化第一个姿态
     gtsam::Rot3 init_rotation(msg->nodes[0].pose.orientation.w,
                               msg->nodes[0].pose.orientation.x,
                               msg->nodes[0].pose.orientation.y,
@@ -147,10 +149,12 @@ bool DistributedLoopClosure::processLocalPoseGraph(
 
     if (config_.my_id_ == 0) {
       // Implicit assumption: first pose of the first robot in DPGO is set to identity
+      // 隐含假设：分布式姿态图优化中第一个机器人的第一个姿态被设置为单位矩阵
       T_world_dpgo_ = init_pose;
     }
 
     // Create the first keyframe in the submap atlas
+    // 在子图集中创建第一个关键帧
     submap_atlas_->createKeyframe(0, init_pose, ts);
     logOdometryPose(
         gtsam::Symbol(robot_id_to_prefix.at(config_.my_id_), 0), init_pose, ts);
@@ -158,6 +162,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
   }
 
   // Extract timestamps of each new pose node
+  // 提取每个新姿态节点的时间戳,只是用于logging
   std::map<int, uint64_t> node_timestamps;
   for (const auto& pg_node : msg->nodes) {
     node_timestamps[(int)pg_node.key] = pg_node.header.stamp.toNSec();
@@ -165,6 +170,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
 
   for (const auto& pg_edge : msg->edges) {
     // An edge represents **odometry** data from the same robot
+    // 边表示来自同一机器人的**里程计**数据
     if (pg_edge.robot_from == config_.my_id_ && pg_edge.robot_to == config_.my_id_ &&
         pg_edge.type == pose_graph_tools_msgs::PoseGraphEdge::ODOM) {
       int frame_src = (int)pg_edge.key_from;
@@ -175,6 +181,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
         // Start submap critical section
         // std::unique_lock<std::mutex> submap_lock(submap_atlas_mutex_);
         // Check that the next keyframe has the expected id
+        // 检查下一个关键帧是否具有预期的ID
         int expected_frame_id = submap_atlas_->numKeyframes();
         if (frame_dst != expected_frame_id) {
           LOG(ERROR) << "Received unexpected keyframe! (received " << frame_dst
@@ -182,6 +189,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
         }
 
         // Use odometry to initialize the next keyframe
+        // 使用里程计初始化下一个关键帧
         lcd::VLCEdge keyframe_odometry;
         kimera_multi_lcd::VLCEdgeFromMsg(pg_edge, &keyframe_odometry);
         const auto T_src_dst = keyframe_odometry.T_src_dst_;
@@ -201,6 +209,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
                pg_edge.robot_to == config_.my_id_ &&
                pg_edge.type == pose_graph_tools_msgs::PoseGraphEdge::LOOPCLOSE) {
       // Collect local loop closures
+      // 收集本地回环检测结果
       local_loop_closures.push_back(pg_edge);
     }
   }
@@ -219,6 +228,7 @@ bool DistributedLoopClosure::processLocalPoseGraph(
       // Start submap critical section
       // std::unique_lock<std::mutex> submap_lock(submap_atlas_mutex_);
       // Convert the loop closure to between the corresponding submaps
+      // 将回环转换为相应子图之间的约束
       const auto keyframe_src = submap_atlas_->getKeyframe(pg_edge.key_from);
       const auto keyframe_dst = submap_atlas_->getKeyframe(pg_edge.key_to);
       if (!keyframe_src || !keyframe_dst) {
@@ -230,13 +240,16 @@ bool DistributedLoopClosure::processLocalPoseGraph(
       gtsam::Symbol from_key(robot_id_to_prefix.at(config_.my_id_), submap_src->id());
       gtsam::Symbol to_key(robot_id_to_prefix.at(config_.my_id_), submap_dst->id());
       // Skip this loop closure if two submaps are identical or consecutive
+      // 如果两个子图相同或连续，跳过此回环闭合
       if (std::abs(submap_src->id() - submap_dst->id()) <= 1) continue;
       // Skip this loop closure if a loop closure already exists between the two submaps
+      // 如果两个子图之间已存在回环闭合，跳过此回环闭合
       if (hasBetweenFactor(submap_loop_closures_, from_key, to_key)) continue;
       const auto T_s1_f1 = keyframe_src->getPoseInSubmapFrame();
       const auto T_s2_f2 = keyframe_dst->getPoseInSubmapFrame();
       const auto T_s1_s2 = T_s1_f1 * T_f1_f2 * (T_s2_f2.inverse());
       // Convert the loop closure to between the corresponding submaps
+      // 将回环闭合转换为相应子图之间的约束并添加到子图回环闭合中
       submap_loop_closures_.add(
           gtsam::BetweenFactor<gtsam::Pose3>(from_key, to_key, T_s1_s2, noise));
     }
@@ -835,7 +848,7 @@ void DistributedLoopClosure::verifyLoopSpin() {
 // 获取子图级别的pose graph
 // 此函数根据是否增量更新的标志，返回机器人子图之间的相对pose graph
 // 如果是增量更新，仅返回自上次获取以来的新回环和子图
-// 如果不是增量更新，返回所有回环和子图
+// 如果不是增量更新，即是新的位姿图消息或者需要全部pose graph，返回所有回环和子图
 pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
     bool incremental) {
   // Start submap critical section
