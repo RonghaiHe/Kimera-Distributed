@@ -4,7 +4,7 @@
  * @Author: Ronghai He
  * @Date: 2025-04-07 22:59:05
  * @LastEditors: RonghaiHe hrhkjys@qq.com
- * @LastEditTime: 2025-04-08 21:57:31
+ * @LastEditTime: 2025-04-09 14:46:28
  * @FilePath: /src/kimera_distributed/src/DistanceProcess.cpp
  * @Version:
  * @Description:
@@ -48,13 +48,12 @@ DistanceProcess::DistanceProcess(const ros::NodeHandle& n) : nh_(n) {
   team_global_poses_.resize(config.num_robots_);
   team_pose_ids_.resize(config.num_robots_);
   team_latest_poses_idx_.resize(config.num_robots_, std::make_pair(0, 0));
-  t_body_uwb_.resize(config.num_robots_, std::vector<double>(3, 0.0));
   t_uwb_body_.resize(
       3, std::vector<double>(3, 0.0));  // Initialize t_uwb_body_ with appropriate size
   for (size_t id = 0; id < config.num_robots_; id++) {
     ros::param::get(config.robot_names_[config.my_id_] + "/kimera_vio_ros/t_body_uwb" +
                         std::to_string(id),
-                    t_body_uwb_[id]);
+                    t_uwb_body_[id]);
   }
 
   std::string distance_topic = '/' + config.robot_names_[config.my_id_] + "/distance";
