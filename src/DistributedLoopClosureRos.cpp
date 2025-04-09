@@ -55,7 +55,8 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
     }
   }
 
-  ros::param::get("~use_uwb", config.use_uwb, false);
+  config.use_uwb_ = false;
+  ros::param::get("~use_uwb", config.use_uwb_);
 
   // Visual place recognition params
   ros::param::get("~alpha", config.lcd_params_.alpha_);
@@ -1108,15 +1109,15 @@ void DistributedLoopClosureRos::save() {
 }
 
 bool DistributedLoopClosureRos::requestGlobalPoseCallback(
-    requestGlobalPose::Request& request,
-    requestGlobalPose::Response& response) {
+    pose_graph_tools_msgs::RequestGlobalPose::Request& request,
+    pose_graph_tools_msgs::RequestGlobalPose::Response& response) {
   CHECK_EQ(request.robot_id, config_.my_id_);
   if (!backend_update_count_) {
     ROS_WARN("Distributed backend not yet updated, cannot provide global pose.");
     return false;
   }
-  std::vector<uint32> poses_ids_response;
-  navs_msgs::Path path_response;
+  // std::vector<uint64> poses_ids_response;
+  nav_msgs::Path path_response;
   path_response.header.frame_id = world_frame_id_;
   path_response.header.stamp = ros::Time::now();
   geometry_msgs::PoseStamped pose_stamped;
@@ -1130,21 +1131,23 @@ bool DistributedLoopClosureRos::requestGlobalPoseCallback(
   }
 
   for (const auto& id_key : sorted_nodes) {
-    poses_ids_response.push_back(id_key.first);
+    response.pose_ids.push_back(id_key.first);
     const auto keyframe = submap_atlas_->getKeyframe(id_key.second);
     pose_stamped.header.stamp.fromNSec(keyframe->stamp());
-    pose_stamped.pose = GtsamPoseToRos(sorted_nodes.at<gtsam::Pose3>(id_key.second));
+    pose_stamped.pose = GtsamPoseToRos(nodes_ptr->at<gtsam::Pose3>(id_key.second));
 
     path_response.poses.push_back(pose_stamped);
   }
-  response.pose_ids = poses_ids_response;
+  // response.pose_ids = poses_ids_response;
   response.path = path_response;
+
+  ROS_INFO("Provided global pose to robot %ld", config_.my_id_);
 
   return true;
 }
 
 void DistributedLoopClosureRos::UWBCallback(
-    pose_graph_tools_msgs::PoseGraphConstPtr& msg) {
+    const pose_graph_tools_msgs::PoseGraphConstPtr& msg) {
   for (auto& edge : msg->edges) {
     if (edge.robot_from != config_.my_id_ && edge.robot_to != config_.my_id_) {
       continue;

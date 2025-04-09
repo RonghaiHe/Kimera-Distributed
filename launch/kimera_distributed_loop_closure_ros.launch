@@ -10,6 +10,8 @@
   <arg name="odom_frame_id"       default="odom"/>
   <arg name="latest_kf_frame_id"  default="latest_kf"/>
 
+  <arg name="use_uwb" default="false"/>
+
   <!-- Dataset -->
   <arg name="dataset_name"   default="warty"/>
   <!-- Parameters that control communication due to VLC -->
@@ -58,6 +60,7 @@
     <param name="offline_dir"            value="$(arg offline_dir)" />
     <param name="max_submap_size"        value="$(arg max_submap_size)"/>
     <param name="max_submap_distance"    value="$(arg max_submap_distance)"/>
+    <param name="use_uwb"                value="$(arg use_uwb)" />
     <rosparam file="$(find kimera_distributed)/params/visual_loopclosure_$(arg dataset_name).yaml"/>
     <rosparam file="$(find kimera_distributed)/params/$(arg robot_names_config).yaml" />
   </node>

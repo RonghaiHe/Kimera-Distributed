@@ -1,0 +1,58 @@
+<launch>
+  <!-- Total number of robots -->
+  <arg name="num_robots" default="1"/>
+  <!-- Unique integer id of this robot. -->
+  <arg name="robot_id" default="0"/>
+  <arg name="robot_name" default="kimera"/>
+  <arg name="random_seed" default="42"/>
+  <arg name="frame_id" default="map"/>
+  <arg name="world_frame_id"      default="world"/>
+  <arg name="odom_frame_id"       default="odom"/>
+  <arg name="latest_kf_frame_id"  default="latest_kf"/>
+
+  <!-- Dataset -->
+  <arg name="dataset_name"   default="warty"/>
+  <!-- Parameters that control communication due to VLC -->
+  <arg name="alpha"                default="0.5"/>
+  <arg name="bow_skip_num"         default="1"   />
+  <arg name="bow_batch_size"       default="100" />
+  <arg name="vlc_batch_size"       default="10"/>
+  <arg name="loop_batch_size"      default="100"/>
+  <arg name="comm_sleep_time"      default="5" />
+  <arg name="loop_sync_sleep_time" default="5"/>
+  <arg name="detection_batch_size" default="30" />
+  <!-- Debug -->
+  <arg name="debug"              default="false" />
+  <arg name="launch_prefix"      value="xterm -e gdb -ex run \-\-args" if="$(arg debug)"/>
+  <arg name="launch_prefix"      value=""    unless="$(arg debug)"/>
+  <!-- Run offline -->
+  <arg name="run_offline"          default="false" />
+  <arg name="offline_dir"          default=""/>
+  <!-- Submap setup -->
+  <arg name="max_submap_size"      default="100" />
+  <arg name="max_submap_distance"  default="0.5" />
+  <arg name="robot_names_config"   default="robot_names"/>
+  <arg name="vocab_path"           default="$(find kimera_vio)/vocabulary/ORBvoc.yml"/>
+  <arg name="log_output_path"      default="$(find kimera_distributed)/logs/kimera$(arg robot_id)/"/>
+
+  <group ns="kimera_distributed">
+    <!-- Launch Kimera Distributed Loop Closure Node -->
+    <node launch-prefix="$(arg launch_prefix)" name="distance_process_node" pkg="kimera_distributed" type="distance_process_node" output="screen" ns="distributed_loop_closure">
+      <param name="robot_id"               value="$(arg robot_id)"/>
+      <param name="num_robots"             value="$(arg num_robots)" />
+      <param name="random_seed"            value="$(arg random_seed)" />
+      <param name="frame_id"               value="$(arg frame_id)" />
+      <param name="world_frame_id"         value="$(arg world_frame_id)" />
+      <param name="odom_frame_id"          value="$(arg odom_frame_id)" />
+      <rosparam file="$(find kimera_distributed)/params/visual_loopclosure_$(arg dataset_name).yaml"/>
+      <rosparam file="$(find kimera_distributed)/params/$(arg robot_names_config).yaml" />
+    </node>
+  </group>
+
+  <include file="$(find pose_graph_tools_ros)/launch/posegraph_view.launch" >
+    <arg name="frame_id"      value="$(arg robot_name)/map" />
+    <arg name="graph_topic"   value="pose_graph_incremental" />
+    <arg name="ns"            value="kimera_distributed"/>
+  </include>
+
+</launch>

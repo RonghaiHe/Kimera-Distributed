@@ -1,6 +1,18 @@
 /*
  * Copyright © 2025, Sun Yat-sen University, Guangzhou, Guangdong, 510275, All Rights
  * Reserved
+ * @Author: Ronghai He
+ * @Date: 2025-04-10 00:44:12
+ * @LastEditors: RonghaiHe hrhkjys@qq.com
+ * @LastEditTime: 2025-04-10 00:44:12
+ * @FilePath: /src/kimera_distributed/src/RelativeTransformationFactor.cpp
+ * @Version:
+ * @Description:
+ *
+ */
+/*
+ * Copyright © 2025, Sun Yat-sen University, Guangzhou, Guangdong, 510275, All Rights
+ * Reserved
  * @Description: Implementation of RelativeTransformationFactor for optimization of
  * |R*a_i+t+b_i|^2-d_i^2
  */
@@ -52,10 +64,9 @@ gtsam::Vector RelativeTransformationFactor::evaluateError(
     double squared_norm = error_vector.dot(error_vector);
     double squared_distance = distances_[i] * distances_[i];
     errors[i] = squared_norm - squared_distance;
-    d
 
-        // Calculate Jacobian if requested
-        if (H) {
+    // Calculate Jacobian if requested
+    if (H) {
       // For the derivative, we need d/dx (|R*a_i+t+b_i|^2 - d_i^2)
       // This is 2*(R*a_i+t+b_i)^T * d/dx (R*a_i+t+b_i)
 

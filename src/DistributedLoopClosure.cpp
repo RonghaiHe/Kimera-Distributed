@@ -823,7 +823,7 @@ pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
     out_graph = GtsamGraphToRos(submap_loop_closures_, gtsam::Values());
   }
 
-  if (config_.use_uwb) {
+  if (config_.use_uwb_) {
     size_t start_idx = incremental ? last_get_uwb_idx_ : 0;
     size_t end_idx = submap_uwb_.size();
     for (size_t submap_uwb_id = start_idx; submap_uwb_id < end_idx; ++submap_uwb_id) {
@@ -848,6 +848,8 @@ pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
         out_graph.edges.push_back(edge);
       }
     }
+
+    LOG(INFO) << "Finished converting to pose graph using relative distances.";
 
     // TODO (RonghaiHe) If node is used, Fill in submap_uwb_ nodes
     // start_idx = (incremental) ? start_idx + 1 : start_idx;

@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.5)
 project(kimera_distributed)
 
-SET(CMAKE_BUILD_TYPE Release)
+# SET(CMAKE_BUILD_TYPE Release)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++17 -march=native -pthread -O3")
+
 
 find_package(catkin_simple REQUIRED)
 
@@ -33,6 +35,8 @@ cs_add_library(${PROJECT_NAME}
   src/SubmapAtlas.cpp
   src/DistributedLoopClosure.cpp
   src/DistributedLoopClosureRos.cpp
+  src/RelativeTransformationFactor.cpp
+  src/DistanceProcess.cpp
   src/utils.cpp
 )
 
@@ -47,6 +51,10 @@ target_link_libraries(${PROJECT_NAME}
 cs_add_executable(kimera_distributed_loop_closure_node
   src/DistributedLoopClosureNode.cpp)
 target_link_libraries(kimera_distributed_loop_closure_node ${PROJECT_NAME})
+
+cs_add_executable(distance_process_node
+  src/DistanceProcessNode.cpp)
+target_link_libraries(distance_process_node ${PROJECT_NAME})
 
 # Unit tests 
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/test)

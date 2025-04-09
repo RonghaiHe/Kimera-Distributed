@@ -6,13 +6,14 @@
 
 #pragma once
 
-#include <navs_msgs/Path.h>
+#include <nav_msgs/Path.h>
 #include <pose_graph_tools_msgs/BowQueries.h>
 #include <pose_graph_tools_msgs/BowRequests.h>
 #include <pose_graph_tools_msgs/LoopClosures.h>
 #include <pose_graph_tools_msgs/LoopClosuresAck.h>
 #include <pose_graph_tools_msgs/PoseGraph.h>
 #include <pose_graph_tools_msgs/PoseGraphQuery.h>
+#include <pose_graph_tools_msgs/RequestGlobalPose.h>
 #include <pose_graph_tools_msgs/VLCFrames.h>
 #include <pose_graph_tools_msgs/VLCRequests.h>
 #include <ros/ros.h>
@@ -74,6 +75,7 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
 
   // ROS service
   ros::ServiceServer pose_graph_request_server_;
+  ros::ServiceServer global_pose_request_server_;
 
   // Timer
   ros::Timer log_timer_;
@@ -279,10 +281,11 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
    */
   void save();
 
-  bool requestGlobalPoseCallback(requestGlobalPose::Request& request,
-                                 requestGlobalPose::Response& response);
+  bool requestGlobalPoseCallback(
+      pose_graph_tools_msgs::RequestGlobalPose::Request& request,
+      pose_graph_tools_msgs::RequestGlobalPose::Response& response);
 
-  void UWBCallback(pose_graph_tools_msgs::PoseGraphConstPtr& msg);
+  void UWBCallback(const pose_graph_tools_msgs::PoseGraphConstPtr& msg);
 };
 
 }  // namespace kimera_distributed
