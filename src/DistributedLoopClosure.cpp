@@ -30,6 +30,7 @@ DistributedLoopClosure::DistributedLoopClosure()
       backend_update_count_(0),
       last_get_submap_idx_(0),
       last_get_lc_idx_(0),
+      last_get_uwb_idx_(0),
       bow_backlog_(0),
       vlc_backlog_(0) {}
 
@@ -311,7 +312,7 @@ void DistributedLoopClosure::savePosesToFile(const std::string& filename,
 }
 
 void DistributedLoopClosure::saveSortedPosesToFile(const std::string& filename,
-                                             const gtsam::Values& nodes) const {
+                                                   const gtsam::Values& nodes) const {
   std::ofstream file;
   file.open(filename);
   if (!file.is_open()) {
@@ -341,7 +342,7 @@ void DistributedLoopClosure::saveSortedPosesToFile(const std::string& filename,
     file << quat.x() << " ";
     file << quat.y() << " ";
     file << quat.z() << " ";
-    file << quat.w() << "\n";    
+    file << quat.w() << "\n";
   }
   file.close();
 }
@@ -821,6 +822,49 @@ pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
   } else {
     out_graph = GtsamGraphToRos(submap_loop_closures_, gtsam::Values());
   }
+
+  if (config_.use_uwb) {
+    size_t start_idx = incremental ? last_get_uwb_idx_ : 0;
+    size_t end_idx = submap_uwb_.size();
+    for (size_t submap_uwb_id = start_idx; submap_uwb_id < end_idx; ++submap_uwb_id) {
+      // check if between factor
+      if (boost::dynamic_pointer_cast<gtsam::BetweenFactor<gtsam::Pose3>>(
+              submap_uwb_[submap_uwb_id])) {
+        // convert to between factor
+        const gtsam::BetweenFactor<gtsam::Pose3>& factor =
+            *boost::dynamic_pointer_cast<gtsam::BetweenFactor<gtsam::Pose3>>(
+                submap_uwb_[submap_uwb_id]);
+        // convert between factor to PoseGraphEdge type
+        pose_graph_tools_msgs::PoseGraphEdge edge;
+        gtsam::Symbol front(factor.front());
+        gtsam::Symbol back(factor.back());
+        edge.key_from = front.index();
+        edge.key_to = back.index();
+        edge.robot_from = robot_prefix_to_id.at(front.chr());
+        edge.robot_to = robot_prefix_to_id.at(back.chr());
+
+        edge.type = pose_graph_tools_msgs::PoseGraphEdge::UWB;
+        edge.pose = GtsamPoseToRos(factor.measured());
+        out_graph.edges.push_back(edge);
+      }
+    }
+
+    // TODO (RonghaiHe) If node is used, Fill in submap_uwb_ nodes
+    // start_idx = (incremental) ? start_idx + 1 : start_idx;
+    // for (int submap_id = start_idx; submap_id < end_idx + 1; ++submap_id) {
+    //   pose_graph_tools_msgs::PoseGraphNode node;
+    //   const auto submap = CHECK_NOTNULL(submap_atlas_->getSubmap(submap_id));
+    //   node.robot_id = config_.my_id_;
+    //   node.key = submap->id();
+    //   node.header.stamp.fromNSec(submap->stamp());
+    //   node.header.frame_id = config_.frame_id_;
+    //   node.pose = GtsamPoseToRos(submap->getPoseInOdomFrame());
+    //   out_graph.nodes.push_back(node);
+    //   out_graph.header.stamp.fromNSec(submap->stamp());
+    //   out_graph.header.frame_id = config_.frame_id_;
+    // }
+  }
+
   const std::string robot_name = config_.robot_names_.at(config_.my_id_);
 
   // Fill in submap-level odometry

@@ -6,11 +6,11 @@
 
 #pragma once
 
+#include <kimera_multi_lcd/types.h>
+
 #include <map>
 #include <string>
 #include <vector>
-
-#include <kimera_multi_lcd/types.h>
 
 namespace kimera_distributed {
 
@@ -20,6 +20,8 @@ struct DistributedLoopClosureConfig {
   std::string frame_id_;
   bool log_output_;
   std::string log_output_dir_;
+
+  bool use_uwb_;
 
   // Offline mode
   bool run_offline_;
@@ -44,6 +46,13 @@ struct DistributedLoopClosureConfig {
   int bow_skip_num_;          // Request every bow_skip_num_ bow vectors
 
   // Robot names
+  std::map<size_t, std::string> robot_names_;
+};
+
+struct DistanceProcessConfig {
+  size_t my_id_;
+  size_t num_robots_;
+  std::string frame_id_;
   std::map<size_t, std::string> robot_names_;
 };
 

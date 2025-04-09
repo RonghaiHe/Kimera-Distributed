@@ -55,6 +55,8 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
     }
   }
 
+  ros::param::get("~use_uwb", config.use_uwb, false);
+
   // Visual place recognition params
   ros::param::get("~alpha", config.lcd_params_.alpha_);
   ros::param::get("~dist_local", config.lcd_params_.dist_local_);
@@ -196,6 +198,22 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
                         this);
       loop_ack_sub_.push_back(ack_sub);
     }
+    std::string uwb_topic = "/" + config_.robot_names_[id] +
+                            "/kimera_distributed/pose_graph_distances_incremental";
+    ros::Subscriber uwb_sub =
+        nh_.subscribe(uwb_topic, 100, &DistributedLoopClosureRos::UWBCallback, this);
+    uwb_sub_.push_back(uwb_sub);
+
+    // if (id != config_.my_id_) {
+    //   std::string uwb_ack_topic =
+    //       "/" + config_.robot_names_[id] + "/kimera_distributed/uwb_ack";
+    //   ros::Subscriber auwb_ck_sub =
+    //       nh_.subscribe(ack_uwb_topic,
+    //                     100,
+    //                     &DistributedLoopClosureRos::UWBAcknowledgementCallback,
+    //                     this);
+    //   uwb_ack_sub_.push_back(uwb_ack_sub);
+    // }
   }
 
   if (config_.my_id_ > 0) {
@@ -243,6 +261,11 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
   loop_ack_pub_ =
       nh_.advertise<pose_graph_tools_msgs::LoopClosuresAck>(ack_topic, 100, true);
 
+  // std::string ack_uwb_pub_topic =
+  //     "/" + config_.robot_names_[config_.my_id_] + "/kimera_distributed/uwb_ack";
+  // uwb_ack_pub_ = nh_.advertise<pose_graph_tools_msgs::LoopClosuresAck>(
+  //     ack_uwb_pub_topic, 100, true);
+
   std::string optimized_nodes_topic = "/" + config_.robot_names_[config_.my_id_] +
                                       "/kimera_distributed/optimized_nodes";
   optimized_nodes_pub_ =
@@ -261,6 +284,11 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
   // ROS service
   pose_graph_request_server_ = nh_.advertiseService(
       "request_pose_graph", &DistributedLoopClosureRos::requestPoseGraphCallback, this);
+
+  global_pose_request_server_ =
+      nh_.advertiseService("request_global_pose",
+                           &DistributedLoopClosureRos::requestGlobalPoseCallback,
+                           this);
 
   log_timer_ = nh_.createTimer(
       ros::Duration(10.0), &DistributedLoopClosureRos::logTimerCallback, this);
@@ -1078,4 +1106,58 @@ void DistributedLoopClosureRos::save() {
   saveBowVectors(config_.log_output_dir_);
   saveVLCFrames(config_.log_output_dir_);
 }
+
+bool DistributedLoopClosureRos::requestGlobalPoseCallback(
+    requestGlobalPose::Request& request,
+    requestGlobalPose::Response& response) {
+  CHECK_EQ(request.robot_id, config_.my_id_);
+  if (!backend_update_count_) {
+    ROS_WARN("Distributed backend not yet updated, cannot provide global pose.");
+    return false;
+  }
+  std::vector<uint32> poses_ids_response;
+  navs_msgs::Path path_response;
+  path_response.header.frame_id = world_frame_id_;
+  path_response.header.stamp = ros::Time::now();
+  geometry_msgs::PoseStamped pose_stamped;
+
+  gtsam::Values::shared_ptr nodes_ptr(new gtsam::Values);
+  computePosesInWorldFrame(nodes_ptr);
+  std::map<int, float> sorted_nodes;
+  for (const auto& key_pose : *nodes_ptr) {
+    const auto keyframe = submap_atlas_->getKeyframe(key_pose.key);
+    sorted_nodes[keyframe->id()] = key_pose.key;
+  }
+
+  for (const auto& id_key : sorted_nodes) {
+    poses_ids_response.push_back(id_key.first);
+    const auto keyframe = submap_atlas_->getKeyframe(id_key.second);
+    pose_stamped.header.stamp.fromNSec(keyframe->stamp());
+    pose_stamped.pose = GtsamPoseToRos(sorted_nodes.at<gtsam::Pose3>(id_key.second));
+
+    path_response.poses.push_back(pose_stamped);
+  }
+  response.pose_ids = poses_ids_response;
+  response.path = path_response;
+
+  return true;
+}
+
+void DistributedLoopClosureRos::UWBCallback(
+    pose_graph_tools_msgs::PoseGraphConstPtr& msg) {
+  for (auto& edge : msg->edges) {
+    if (edge.robot_from != config_.my_id_ && edge.robot_to != config_.my_id_) {
+      continue;
+    }
+    gtsam::Symbol submap_from(robot_id_to_prefix.at(edge.robot_from), edge.key_from);
+    gtsam::Symbol submap_to(robot_id_to_prefix.at(edge.robot_to), edge.key_to);
+    const auto pose = RosPoseToGtsam(edge.pose);
+    // TODO: (RonghaiHe) read covariance from message
+    static const gtsam::SharedNoiseModel& noise =
+        gtsam::noiseModel::Isotropic::Variance(6, 4e-2);
+    submap_uwb_.add(
+        gtsam::BetweenFactor<gtsam::Pose3>(submap_from, submap_to, pose, noise));
+  }
+}
+
 }  // namespace kimera_distributed

@@ -73,9 +73,15 @@ class DistributedLoopClosure {
   // Edge IDs of all established loop closures
   std::set<lcd::EdgeID, lcd::CompareEdgeID> submap_loop_closures_ids_;
 
+  gtsam::NonlinearFactorGraph submap_uwb_;
+  // New loop closures to be synchronized with other robots
+  //   std::map<lcd::EdgeID, gtsam::BetweenFactor<gtsam::Pose3>, lcd::CompareEdgeID>
+  //       submap_uwb_queue_;
+
   // Data structures for offline mode
   gtsam::NonlinearFactorGraph offline_keyframe_loop_closures_;
-  std::map<lcd::RobotPoseId, pose_graph_tools_msgs::VLCFrameMsg> offline_robot_pose_msg_;
+  std::map<lcd::RobotPoseId, pose_graph_tools_msgs::VLCFrameMsg>
+      offline_robot_pose_msg_;
 
   // List of potential loop closures
   // that require to request VLC frames
@@ -107,6 +113,7 @@ class DistributedLoopClosure {
   // For incremental publishing
   size_t last_get_submap_idx_;
   size_t last_get_lc_idx_;
+  size_t last_get_uwb_idx_;
 
   // Threads
   std::unique_ptr<std::thread> detection_thread_;
@@ -268,7 +275,8 @@ class DistributedLoopClosure {
    * @brief Save the latest pose estimates to the world frame, sorted by keyframe ID
    * @brief filename Output file
    */
-  void saveSortedPosesToFile(const std::string& filename, const gtsam::Values& nodes) const;
+  void saveSortedPosesToFile(const std::string& filename,
+                             const gtsam::Values& nodes) const;
   /**
    * @brief Save the latest pose estimates to the world frame
    * @brief filename Output file

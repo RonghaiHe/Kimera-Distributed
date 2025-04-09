@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <navs_msgs/Path.h>
 #include <pose_graph_tools_msgs/BowQueries.h>
 #include <pose_graph_tools_msgs/BowRequests.h>
 #include <pose_graph_tools_msgs/LoopClosures.h>
@@ -52,6 +53,8 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
   std::vector<ros::Subscriber> vlc_responses_sub_;
   std::vector<ros::Subscriber> loop_sub_;
   std::vector<ros::Subscriber> loop_ack_sub_;
+  std::vector<ros::Subscriber> uwb_sub_;
+  //   std::vector<ros::Subscriber> uwb_ack_sub_;
   ros::Subscriber dpgo_sub_;
   ros::Subscriber connectivity_sub_;
   ros::Subscriber dpgo_frame_corrector_sub_;
@@ -64,6 +67,7 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
   ros::Publisher bow_response_pub_;
   ros::Publisher loop_pub_;
   ros::Publisher loop_ack_pub_;
+  //   ros::Publisher uwb_ack_pub_;
   ros::Publisher optimized_nodes_pub_;
   ros::Publisher optimized_path_pub_;
   ros::Publisher dpgo_frame_corrector_pub_;
@@ -274,6 +278,11 @@ class DistributedLoopClosureRos : DistributedLoopClosure {
    * @brief Save VLC frames and BoW vectors
    */
   void save();
+
+  bool requestGlobalPoseCallback(requestGlobalPose::Request& request,
+                                 requestGlobalPose::Response& response);
+
+  void UWBCallback(pose_graph_tools_msgs::PoseGraphConstPtr& msg);
 };
 
 }  // namespace kimera_distributed
