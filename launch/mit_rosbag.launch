@@ -6,9 +6,21 @@
 	<arg name="publish_clock" default="false" />
 	<arg name="clock_arg" value="--clock" if="$(arg publish_clock)" />
 	<arg name="clock_arg" value="" unless="$(arg publish_clock)" />
+	<arg name="use_uwb" default="false" />
+	<arg name="uwb_topic0" default="" unless="$(arg use_uwb)" />
+	<arg name="uwb_topic0" default="/$(arg input_ns)/uwb_distance/0" if="$(arg use_uwb)" />
+	<arg name="uwb_topic1" default="" unless="$(arg use_uwb)" />
+	<arg name="uwb_topic1" default="/$(arg input_ns)/uwb_distance/1" if="$(arg use_uwb)" />
+	<arg name="uwb_topic2" default="" unless="$(arg use_uwb)" />
+	<arg name="uwb_topic2" default="/$(arg input_ns)/uwb_distance/2" if="$(arg use_uwb)" />
+	
+	<arg name="new_start_time" default="false" />
+	<arg name="start_time_after" default="180" />
+	<arg name="play_from" default="--start $(arg start_time_after)" if="$(arg new_start_time)" />
+	<arg name="play_from" default="" unless="$(arg new_start_time)" />
 
 	<node pkg="rosbag" type="play" name="player_$(arg output_ns)" output="screen" 
-		args="$(arg bagfile) $(arg clock_arg) -r $(arg rate) -s0.1 --topics
+		args="$(arg bagfile) $(arg clock_arg) -r $(arg rate) --topics
 		/$(arg input_ns)/detection_out_topic
 		/$(arg input_ns)/forward/color/camera_info
 		/$(arg input_ns)/forward/color/image_raw/compressed
@@ -20,8 +32,12 @@
 		/$(arg input_ns)/forward/infra2/camera_info
 		/$(arg input_ns)/forward/infra2/image_rect_raw/compressed
 		/$(arg input_ns)/jackal_velocity_controller/odom
+		$(arg uwb_topic0)
+		$(arg uwb_topic1)
+		$(arg uwb_topic2)
 		/tf_static
-		/tf_aggregate">
+		/tf_aggregate
+		$(arg play_from)">
 
 		<remap from="/$(arg input_ns)/detection_out_topic"                      to="/$(arg output_ns)/detection_out_topic"/>
 		<remap from="/$(arg input_ns)/forward/color/camera_info"                to="/$(arg output_ns)/forward/color/camera_info"/>
