@@ -14,10 +14,16 @@
 	<arg name="uwb_topic2" default="" unless="$(arg use_uwb)" />
 	<arg name="uwb_topic2" default="/$(arg input_ns)/uwb_distance/2" if="$(arg use_uwb)" />
 	
-	<arg name="new_start_time" default="false" />
-	<arg name="start_time_after" default="180" />
-	<arg name="play_from" default="--start $(arg start_time_after)" if="$(arg new_start_time)" />
-	<arg name="play_from" default="" unless="$(arg new_start_time)" />
+	<arg name="start_time_after" default="0" /> <!--unit: [s]-->
+	<arg name="play_from" default="--start $(arg start_time_after)" />
+
+	<arg name="fix_duration" default="false" />
+	<arg name="duration_num" default="600" /> <!--unit: [s]-->
+	<arg name="duration" default="--duration $(arg duration_num)" if="$(arg fix_duration)" />
+	<arg name="duration" default="" unless="$(arg fix_duration)" />
+
+	<arg name="delay_num" default="0" /> <!--unit: [s]-->
+	<arg name="delay" default="--delay $(arg delay_num)" />
 
 	<node pkg="rosbag" type="play" name="player_$(arg output_ns)" output="screen" 
 		args="$(arg bagfile) $(arg clock_arg) -r $(arg rate) --topics
@@ -37,7 +43,9 @@
 		$(arg uwb_topic2)
 		/tf_static
 		/tf_aggregate
-		$(arg play_from)">
+		$(arg play_from)
+		$(arg duration)
+		$(arg delay)">
 
 		<remap from="/$(arg input_ns)/detection_out_topic"                      to="/$(arg output_ns)/detection_out_topic"/>
 		<remap from="/$(arg input_ns)/forward/color/camera_info"                to="/$(arg output_ns)/forward/color/camera_info"/>
