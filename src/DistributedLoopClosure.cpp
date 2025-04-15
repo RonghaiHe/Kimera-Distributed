@@ -824,7 +824,10 @@ pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
   }
 
   if (config_.use_uwb_) {
-    size_t start_idx = incremental ? last_get_uwb_idx_ : 0;
+    // TODO(RonghaiHe) To judge if use incremental or not, and add the judgement for
+    // redundant detection
+    // size_t start_idx = incremental ? last_get_uwb_idx_ : 0;
+    size_t start_idx = last_get_uwb_idx_;
     size_t end_idx = submap_uwb_.size();
     for (size_t submap_uwb_id = start_idx; submap_uwb_id < end_idx; ++submap_uwb_id) {
       // check if between factor
@@ -848,8 +851,11 @@ pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
         out_graph.edges.push_back(edge);
       }
     }
-
-    LOG(INFO) << "Finished converting to pose graph using relative distances.";
+    last_get_uwb_idx_ = end_idx;
+    if (start_idx < end_idx) {
+      LOG(INFO) << "Finished converting to " << end_idx - start_idx
+                << " edges of pose graph using relative distances.";
+    }
 
     // TODO (RonghaiHe) If node is used, Fill in submap_uwb_ nodes
     // start_idx = (incremental) ? start_idx + 1 : start_idx;
