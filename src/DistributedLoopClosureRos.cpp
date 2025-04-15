@@ -1131,8 +1131,11 @@ bool DistributedLoopClosureRos::requestGlobalPoseCallback(
   }
 
   for (const auto& id_key : sorted_nodes) {
-    response.pose_ids.push_back(id_key.first);
     const auto keyframe = submap_atlas_->getKeyframe(id_key.second);
+
+    response.submap_ids.push_back(CHECK_NOTNULL(keyframe->getSubmap())->id());
+    const auto& T_submap_keyframe = keyframe->getPoseInSubmapFrame();
+    response.T_submap_kfs.push_back(GtsamPoseToRos(T_submap_keyframe));
     pose_stamped.header.stamp.fromNSec(keyframe->stamp());
     pose_stamped.pose = GtsamPoseToRos(nodes_ptr->at<gtsam::Pose3>(id_key.second));
 
