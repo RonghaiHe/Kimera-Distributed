@@ -124,6 +124,7 @@ class DistributedLoopClosure {
   std::ofstream odometry_file_;      // log received odometry poses from VIO
   std::ofstream loop_closure_file_;  // log inter-robot loop closures
   std::ofstream lcd_log_file_;       // log loop closure statistics
+  std::ofstream uwb_log_file_;
   size_t bow_backlog_,
       vlc_backlog_;  // Current backlog (number of missing BoW and VLC frames)
   std::vector<size_t> num_loops_with_robot_;

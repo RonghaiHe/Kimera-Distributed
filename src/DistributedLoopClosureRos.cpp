@@ -1160,9 +1160,35 @@ void DistributedLoopClosureRos::UWBCallback(
     const auto pose = RosPoseToGtsam(edge.pose);
     // TODO: (RonghaiHe) read covariance from message
     static const gtsam::SharedNoiseModel& noise =
-        gtsam::noiseModel::Isotropic::Variance(6, 4e-2);
+        gtsam::noiseModel::Isotropic::Variance(6, 5e-2);
     submap_uwb_.add(
         gtsam::BetweenFactor<gtsam::Pose3>(submap_from, submap_to, pose, noise));
+    if (config_.log_output_) {
+      if (uwb_log_file_.is_open()) {
+        uwb_log_file_ << edge.stamp_from.toNSec() / 1e9 << "," << edge.robot_from << ","
+                      << edge.key_from << "," << edge.stamp_to.toNSec() / 1e9 << ","
+                      << edge.robot_to << "," << edge.key_to << ","
+                      << edge.pose.orientation.x << "," << edge.pose.orientation.y
+                      << "," << edge.pose.orientation.z << ","
+                      << edge.pose.orientation.w << "," << edge.pose.position.x << ","
+                      << edge.pose.position.y << "," << edge.pose.position.z << ","
+                      << edge.pose_kf.orientation.x << "," << edge.pose_kf.orientation.y
+                      << "," << edge.pose_kf.orientation.z << ","
+                      << edge.pose_kf.orientation.w << "," << edge.pose_kf.position.x
+                      << "," << edge.pose_kf.position.y << ","
+                      << edge.pose_kf.position.z << "," << edge.pose_dis.orientation.x
+                      << "," << edge.pose_dis.orientation.y << ","
+                      << edge.pose_dis.orientation.z << ","
+                      << edge.pose_dis.orientation.w << "," << edge.pose_dis.position.x
+                      << "," << edge.pose_dis.position.y << ","
+                      << edge.pose_dis.position.z << "," << edge.distances[0] << ","
+                      << edge.distances[1] << "," << edge.distances[2] << ","
+                      << edge.distances[3] << "," << edge.distances[4] << ","
+                      << edge.distances[5] << "," << edge.distances[6] << ","
+                      << edge.distances[7] << "," << edge.distances[8] << "\n";
+        uwb_log_file_.flush();
+      }
+    }
   }
 }
 

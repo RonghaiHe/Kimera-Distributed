@@ -1071,6 +1071,7 @@ void DistributedLoopClosure::createLogFiles() {
   std::string pose_file_path = config_.log_output_dir_ + "odometry_poses.csv";
   std::string inter_lc_file_path = config_.log_output_dir_ + "loop_closures.csv";
   std::string lcd_file_path = config_.log_output_dir_ + "lcd_log.csv";
+  std::string uwb_file_path = config_.log_output_dir_ + "uwb_log.csv";
 
   odometry_file_.open(pose_file_path);
   if (!odometry_file_.is_open())
@@ -1096,6 +1097,18 @@ void DistributedLoopClosure::createLogFiles() {
                    "num_loop_closures, bow_bytes, vlc_bytes, bow_backlog, vlc_backlog, "
                    "num_loops_with_robots\n";
   lcd_log_file_.flush();
+
+  uwb_log_file_.open(uwb_file_path);
+  if (!uwb_log_file_.is_open()) {
+    LOG(ERROR) << "Error opening log file: " << uwb_file_path;
+  }
+  uwb_log_file_ << std::fixed << std::setprecision(15);
+  uwb_log_file_
+      << "stamp1,robot1,submap1,stamp2,robot2,submap2,qx,qy,qz,qw,tx,ty,tz,"
+         "qx_kf,qy_kf,qz_kf,qw_kf,tx_kf,ty_kf,tz_kf,qx_dis,qy_dis,qz_dis,qw_dis,"
+         "tx_dis,ty_dis,tz_dis,dis0,dis1,dis2,dis3,dis4,"
+         "dis5,dis6,dis7,dis8\n";
+  uwb_log_file_.flush();
 }
 
 void DistributedLoopClosure::closeLogFiles() {
@@ -1103,6 +1116,9 @@ void DistributedLoopClosure::closeLogFiles() {
   if (loop_closure_file_.is_open()) loop_closure_file_.close();
   if (lcd_log_file_.is_open()) {
     lcd_log_file_.close();
+  }
+  if (uwb_log_file_.is_open()) {
+    uwb_log_file_.close();
   }
 }
 
