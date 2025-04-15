@@ -107,10 +107,10 @@ pose_graph_tools_msgs::PoseGraph GtsamGraphToRos(
       gtsam::Matrix66 covariance =
           boost::dynamic_pointer_cast<gtsam::noiseModel::Gaussian>(factor.noiseModel())
               ->covariance();
-      for (size_t i = 0; i < edge.covariance.size(); i++) {
-        size_t row = static_cast<size_t>(i / 6);
-        size_t col = i % 6;
-        edge.covariance[i] = covariance(row, col);
+      for (size_t j = 0; j < edge.covariance.size(); j++) {
+        size_t row = static_cast<size_t>(j / 6);
+        size_t col = j % 6;
+        edge.covariance[j] = covariance(row, col);
       }
       edges.push_back(edge);
     }
