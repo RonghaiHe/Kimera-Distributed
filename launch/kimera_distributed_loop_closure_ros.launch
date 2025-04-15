@@ -25,7 +25,8 @@
   <arg name="detection_batch_size" default="30" />
   <!-- Debug -->
   <arg name="debug"              default="false" />
-  <arg name="launch_prefix"      value="xterm -e gdb -ex run \-\-args" if="$(arg debug)"/>
+  <!-- <arg name="launch_prefix"      value="xterm -e gdb -ex run \-\-args" if="$(arg debug)"/> -->
+  <arg name="launch_prefix"      value="gdb -ex run --args" if="$(arg debug)"/>
   <arg name="launch_prefix"      value=""    unless="$(arg debug)"/>
   <!-- Run offline -->
   <arg name="run_offline"          default="false" />
