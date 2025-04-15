@@ -67,6 +67,7 @@
       <arg name="robot_names_config"        value="$(arg robot_names_config)"/>
       <arg name="vocab_path"                value="$(arg vocab_path)"/>
       <arg name="log_output_path"           value="$(arg log_output_path)/"/>
+      <arg name="use_uwb"                   value="$(arg use_uwb)"/>
     </include>
 
     <node if="$(arg monitor_bw)" pkg="panoptes" type="ros_bw_monitor.py" name="bw_motinor">
