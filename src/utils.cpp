@@ -7,6 +7,7 @@
 #include <gtsam/linear/NoiseModel.h>
 #include <kimera_distributed/utils.h>
 #include <ros/console.h>
+
 #include <cassert>
 
 namespace kimera_distributed {
@@ -53,7 +54,8 @@ void GtsamPoseToRosTf(const gtsam::Pose3& pose, geometry_msgs::Transform* tf) {
 }
 
 // Convert gtsam posegaph to PoseGraph msg
-pose_graph_tools_msgs::PoseGraph GtsamGraphToRos(const gtsam::NonlinearFactorGraph& factors,
+pose_graph_tools_msgs::PoseGraph GtsamGraphToRos(
+    const gtsam::NonlinearFactorGraph& factors,
                                             const gtsam::Values& values,
                                             const gtsam::Vector& gnc_weights) {
   std::vector<pose_graph_tools_msgs::PoseGraphEdge> edges;
