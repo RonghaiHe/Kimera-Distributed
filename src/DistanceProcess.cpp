@@ -4,7 +4,7 @@
  * @Author: Ronghai He
  * @Date: 2025-04-07 22:59:05
  * @LastEditors: RonghaiHe hrhkjys@qq.com
- * @LastEditTime: 2025-04-15 20:54:59
+ * @LastEditTime: 2025-04-16 02:08:24
  * @FilePath: /src/kimera_distributed/src/DistanceProcess.cpp
  * @Version:
  * @Description:
@@ -14,6 +14,7 @@
 
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/inference/Symbol.h>
+#include <gtsam/nonlinear/GncOptimizer.h>
 #include <gtsam/nonlinear/LevenbergMarquardtOptimizer.h>
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 #include <gtsam/nonlinear/Values.h>
@@ -229,8 +230,20 @@ bool DistanceProcess::distances2RelativePose(const std::vector<double>& distance
   lm_params.setRelativeErrorTol(1e-5);
   lm_params.setAbsoluteErrorTol(1e-5);
 
-  gtsam::LevenbergMarquardtOptimizer optimizer(graph, initial_estimate, lm_params);
-  gtsam::Values result = optimizer.optimize();
+  gtsam::GncParams<gtsam::LevenbergMarquardtParams> gnc_params(lm_params);
+  // gnc_params.setMaxIterations(100);
+  // gncParams.setMuStep(params_.gnc_params.mu_step_);
+  // gncParams.setRelativeCostTol(params_.gnc_params.relative_cost_tol_);
+  // gncParams.setWeightsTol(params_.gnc_params.weights_tol_);
+  // Create GNC optimizer
+  gnc_params.setLossType(gtsam::GncLossType::GM);
+  gtsam::GncOptimizer<gtsam::GncParams<gtsam::LevenbergMarquardtParams>> gnc_optimizer(
+      graph, initial_estimate, gnc_params);
+
+  gtsam::Values result = gnc_optimizer.optimize();
+
+  // gtsam::LevenbergMarquardtOptimizer optimizer(graph, initial_estimate, lm_params);
+  // gtsam::Values result = optimizer.optimize();
 
   // gtsam::Marginals marginals(graph, result,
   // gtsam::Marginals::Factorization::CHOLESKY); covariance =
@@ -244,15 +257,13 @@ bool DistanceProcess::distances2RelativePose(const std::vector<double>& distance
     ROS_ERROR("Fail to calculate the relative pose using estimated poses with %f",
               final_error);
     // gtsam::Rot3 iden_R = gtsam::Rot3::Identity();
-    // gtsam::Point3 iden_t(
-    //     measurement_distances[0] / 1.414, measurement_distances[0] / 1.414, 0);
+    gtsam::Point3 iden_t(
+        measurement_distances[0] / 1.414, measurement_distances[0] / 1.414, 0);
     gtsam::Values initial_estimate2;
-    initial_estimate2.insert(pose_key,
-                             gtsam::Pose3(relative_rotation_init,
-                                          relative_translation_init.normalized() *
-                                              measurement_distances[0]));
-    gtsam::LevenbergMarquardtOptimizer optimizer2(graph, initial_estimate2, lm_params);
-    gtsam::Values result2 = optimizer2.optimize();
+    initial_estimate2.insert(pose_key, gtsam::Pose3(relative_rotation_init, iden_t));
+    gtsam::GncOptimizer<gtsam::GncParams<gtsam::LevenbergMarquardtParams>>
+        gnc_optimizer2(graph, initial_estimate2, gnc_params);
+    gtsam::Values result2 = gnc_optimizer2.optimize();
 
     // gtsam::Marginals marginals(graph, result,
     // gtsam::Marginals::Factorization::CHOLESKY); covariance =
