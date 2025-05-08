@@ -56,8 +56,8 @@ void GtsamPoseToRosTf(const gtsam::Pose3& pose, geometry_msgs::Transform* tf) {
 // Convert gtsam posegaph to PoseGraph msg
 pose_graph_tools_msgs::PoseGraph GtsamGraphToRos(
     const gtsam::NonlinearFactorGraph& factors,
-                                            const gtsam::Values& values,
-                                            const gtsam::Vector& gnc_weights) {
+    const gtsam::Values& values,
+    const gtsam::Vector& gnc_weights) {
   std::vector<pose_graph_tools_msgs::PoseGraphEdge> edges;
   size_t single_robot_lcs = 0;
   size_t inter_robot_lcs = 0;
