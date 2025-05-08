@@ -27,7 +27,7 @@
 
   <!-- Submap settings -->
   <arg name="max_submap_distance"     default="2" />
-  <arg name="max_submap_size"         default="100" />
+  <arg name="max_submap_size"         default="1" />
 
   <!-- Offline mode -->
   <arg name="run_offline"             default="false"/>

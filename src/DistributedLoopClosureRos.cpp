@@ -202,7 +202,7 @@ DistributedLoopClosureRos::DistributedLoopClosureRos(const ros::NodeHandle& n)
     std::string uwb_topic = "/" + config_.robot_names_[id] +
                             "/kimera_distributed/pose_graph_distances_incremental";
     ros::Subscriber uwb_sub =
-        nh_.subscribe(uwb_topic, 100, &DistributedLoopClosureRos::UWBCallback, this);
+        nh_.subscribe(uwb_topic, 1000, &DistributedLoopClosureRos::UWBCallback, this);
     uwb_sub_.push_back(uwb_sub);
 
     // if (id != config_.my_id_) {

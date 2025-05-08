@@ -32,7 +32,7 @@
       <arg name="random_seed"                      value="$(arg random_seed)" />
       <arg name="robot_names_file"                 value="$(find kimera_distributed)/params/$(arg robot_names_config).yaml" />
       <arg name="debug"                            value="$(arg debug)" />
-      <arg name="verbose"                          value="true" />
+      <arg name="verbose"                          value="false" />
       <arg name="publish_iterate"                  value="false"/>
       <arg name="acceleration"                     value="false" />
       <arg name="update_rule"                      value="RoundRobin"/>
@@ -49,7 +49,7 @@
       <arg name="GNC_mu_step"                      value="2.0" />
       <arg name="GNC_init_mu"                      value="1e-5" />
       <arg name="robust_init_min_inliers"          value="3" />
-      <arg name="robust_opt_num_weight_updates"    value="3" />
+      <arg name="robust_opt_num_weight_updates"    value="10" />
       <arg name="robust_opt_num_resets"            value="3" />
       <arg name="robust_opt_min_convergence_ratio" value="0.0" />
       <arg name="robust_opt_inner_iters_per_robot" value="$(arg gnc_inner_iters)" />
