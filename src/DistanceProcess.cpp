@@ -4,7 +4,7 @@
  * @Author: Ronghai He
  * @Date: 2025-04-07 22:59:05
  * @LastEditors: RonghaiHe hrhkjys@qq.com
- * @LastEditTime: 2025-04-16 02:08:24
+ * @LastEditTime: 2025-04-17 21:19:56
  * @FilePath: /src/kimera_distributed/src/DistanceProcess.cpp
  * @Version:
  * @Description:
@@ -35,8 +35,21 @@ DistanceProcess::DistanceProcess(const ros::NodeHandle& n) : nh_(n) {
   ros::param::get("~robot_id", my_id_int);
   ros::param::get("~num_robots", num_robots_int);
   ros::param::get("~frame_id", config_.frame_id_);
-  assert(my_id_int >= 0);
-  assert(num_robots_int > 0);
+  if (my_id_int < 0) {
+    if (num_robots_int <= 0) {
+      ROS_ERROR(
+          "Invalid number of robots: %d. The number of robots must be greater than 0.",
+          num_robots_int);
+      ros::shutdown();
+      return;
+    }
+    throw std::runtime_error("Invalid robot ID. Initialization failed.");
+  }
+  if (num_robots_int <= 0) {
+    ROS_ERROR("Invalid number of robots: %d. Number of robots must be positive.",
+              num_robots_int);
+    throw std::runtime_error("Invalid number of robots. Initialization failed.");
+  }
   config_.my_id_ = my_id_int;
   config_.num_robots_ = num_robots_int;
 
@@ -237,7 +250,10 @@ bool DistanceProcess::distances2RelativePose(const std::vector<double>& distance
 
   // TODO(RonghaiHe) Use CHECK
   if (distances.size() != 3 * config_.num_robots_) {
-    ROS_ERROR("Incorrect number of distance measurements");
+    ROS_ERROR(
+        "Optimization failed: Insufficient measurements. At least 6 measurements are "
+        "required, but only %ld were provided.",
+        measurement_distances.size());
     return false;
   }
 
@@ -255,6 +271,12 @@ bool DistanceProcess::distances2RelativePose(const std::vector<double>& distance
       points_i.push_back(
           gtsam::Point3(t_uwb_body_[i][0], t_uwb_body_[i][1], t_uwb_body_[i][2]));
       measurement_distances.push_back(distances[i * 3 + j]);  // The measured distance
+
+      auto temp = relative_rotation_init * points_j.back() + relative_translation_init -
+                  points_i.back();
+      double residual = temp.norm() - measurement_distances.back();
+      ROS_INFO("Residual: %f", residual);
+      // ros::Duration(2.0).sleep();
     }
   }
 
@@ -294,23 +316,23 @@ bool DistanceProcess::distances2RelativePose(const std::vector<double>& distance
   gtsam::LevenbergMarquardtParams lm_params;
   lm_params.setVerbosityLM("TERMINATION");
   lm_params.setMaxIterations(100);
-  lm_params.setRelativeErrorTol(1e-5);
-  lm_params.setAbsoluteErrorTol(1e-5);
+  lm_params.setRelativeErrorTol(1e-6);
+  lm_params.setAbsoluteErrorTol(1e-6);
 
-  gtsam::GncParams<gtsam::LevenbergMarquardtParams> gnc_params(lm_params);
-  // gnc_params.setMaxIterations(100);
-  // gncParams.setMuStep(params_.gnc_params.mu_step_);
-  // gncParams.setRelativeCostTol(params_.gnc_params.relative_cost_tol_);
-  // gncParams.setWeightsTol(params_.gnc_params.weights_tol_);
-  // Create GNC optimizer
-  gnc_params.setLossType(gtsam::GncLossType::GM);
-  gtsam::GncOptimizer<gtsam::GncParams<gtsam::LevenbergMarquardtParams>> gnc_optimizer(
-      graph, initial_estimate, gnc_params);
+  // gtsam::GncParams<gtsam::LevenbergMarquardtParams> gnc_params(lm_params);
+  // gnc_params.setMuStep(1.2);
+  // gnc_params.setRelativeCostTol(1e-6);
+  // gnc_params.setVerbosityGNC(
+  //     gtsam::GncParams<gtsam::LevenbergMarquardtParams>::Verbosity::SUMMARY);
+  // gnc_params.setLossType(gtsam::GncLossType::GM);
+  // gtsam::GncOptimizer<gtsam::GncParams<gtsam::LevenbergMarquardtParams>>
+  // gnc_optimizer(
+  //     graph, initial_estimate, gnc_params);
 
-  gtsam::Values result = gnc_optimizer.optimize();
+  // gtsam::Values result = gnc_optimizer.optimize();
 
-  // gtsam::LevenbergMarquardtOptimizer optimizer(graph, initial_estimate, lm_params);
-  // gtsam::Values result = optimizer.optimize();
+  gtsam::LevenbergMarquardtOptimizer optimizer(graph, initial_estimate, lm_params);
+  gtsam::Values result = optimizer.optimize();
 
   // gtsam::Marginals marginals(graph, result,
   // gtsam::Marginals::Factorization::CHOLESKY); covariance =
@@ -319,18 +341,29 @@ bool DistanceProcess::distances2RelativePose(const std::vector<double>& distance
   // Check if optimization was successful
   double initial_error = graph.error(initial_estimate);
   double final_error = graph.error(result);
-  bool optimization_improved = final_error < initial_error;
-  if (!optimization_improved || final_error > 0.1) {
-    ROS_ERROR("Fail to calculate the relative pose using estimated poses with %f",
-              final_error);
+  if (final_error > 0.1) {
+    if (final_error <= 0.15) {
+      ROS_WARN(
+          "Optimization marginally improved but final error (%f) is still above the "
+          "threshold (0.1).",
+          final_error);
+    } else {
+      ROS_ERROR(
+          "Fail to calculate the relative pose using estimated poses with final error: "
+          "%f (initial error: %f).",
+          final_error,
+          initial_error);
+    }
     // gtsam::Rot3 iden_R = gtsam::Rot3::Identity();
     gtsam::Point3 iden_t(
         measurement_distances[0] / 1.414, measurement_distances[0] / 1.414, 0);
     gtsam::Values initial_estimate2;
     initial_estimate2.insert(pose_key, gtsam::Pose3(relative_rotation_init, iden_t));
-    gtsam::GncOptimizer<gtsam::GncParams<gtsam::LevenbergMarquardtParams>>
-        gnc_optimizer2(graph, initial_estimate2, gnc_params);
-    gtsam::Values result2 = gnc_optimizer2.optimize();
+    // gtsam::GncOptimizer<gtsam::GncParams<gtsam::LevenbergMarquardtParams>>
+    //     gnc_optimizer2(graph, initial_estimate2, gnc_params);
+    // gtsam::Values result2 = gnc_optimizer2.optimize();
+    gtsam::LevenbergMarquardtOptimizer optimizer2(graph, initial_estimate2, lm_params);
+    gtsam::Values result2 = optimizer2.optimize();
 
     // gtsam::Marginals marginals(graph, result,
     // gtsam::Marginals::Factorization::CHOLESKY); covariance =
@@ -413,32 +446,26 @@ bool DistanceProcess::processSingleDistanceMeasurement(
   // Find appropriate indices for poses
   size_t my_idx = team_latest_poses_idx_[id].first;
   size_t dst_idx = team_latest_poses_idx_[id].second;
-  if (team_global_poses_[config_.my_id_][my_idx].first <= process_meas.first) {
-    auto it_i = std::lower_bound(
-        team_global_poses_[config_.my_id_].begin() + my_idx,
-        team_global_poses_[config_.my_id_].end(),
-        std::make_pair(process_meas.first, geometry_msgs::Pose()),
-        [](const auto& a, const auto& b) { return a.first < b.first; });
-    team_latest_poses_idx_[id].first =
-        std::distance(team_global_poses_[config_.my_id_].begin(), it_i);
+  if (team_global_poses_[config_.my_id_][my_idx].first > process_meas.first) {
+    my_idx = 0;
   }
-  if (team_global_poses_[id][dst_idx].first <= process_meas.first) {
-    auto it_j = std::lower_bound(
-        team_global_poses_[id].begin() + dst_idx,
-        team_global_poses_[id].end(),
-        std::make_pair(process_meas.first, geometry_msgs::Pose()),
-        [](const auto& a, const auto& b) { return a.first < b.first; });
-    team_latest_poses_idx_[id].second =
-        std::distance(team_global_poses_[id].begin(), it_j);
+  auto it_i =
+      std::lower_bound(team_global_poses_[config_.my_id_].begin() + my_idx,
+                       team_global_poses_[config_.my_id_].end(),
+                       std::make_pair(process_meas.first, geometry_msgs::Pose()),
+                       [](const auto& a, const auto& b) { return a.first < b.first; });
+  team_latest_poses_idx_[id].first =
+      std::distance(team_global_poses_[config_.my_id_].begin(), it_i);
+  if (team_global_poses_[id][dst_idx].first > process_meas.first) {
+    dst_idx = 0;
   }
-
-  ROS_INFO("Use robot %ld 's %ld (ID: %ld) and robot %ld 's %ld (ID: %ld)",
-           config_.my_id_,
-           team_latest_poses_idx_[id].first,
-           team_submap_ids_[config_.my_id_][team_latest_poses_idx_[id].first],
-           id,
-           team_latest_poses_idx_[id].second,
-           team_submap_ids_[id][team_latest_poses_idx_[id].second]);
+  auto it_j =
+      std::lower_bound(team_global_poses_[id].begin() + dst_idx,
+                       team_global_poses_[id].end(),
+                       std::make_pair(process_meas.first, geometry_msgs::Pose()),
+                       [](const auto& a, const auto& b) { return a.first < b.first; });
+  team_latest_poses_idx_[id].second =
+      std::distance(team_global_poses_[id].begin(), it_j);
 
   // Calculate initial relative pose
   gtsam::Rot3 relative_rotation_init;
@@ -447,25 +474,40 @@ bool DistanceProcess::processSingleDistanceMeasurement(
 
   std::optional<gtsam::Rot3> oR_i_next, oR_j_next;
 
-  if (my_idx == team_latest_poses_idx_[id].first &&
-      dst_idx == team_latest_poses_idx_[id].second) {
-    // The relative pose is already calculated
-    relative_rotation_init = team_latest_relative_poses_[id].rotation();
-    relative_translation_init = team_latest_relative_poses_[id].translation();
-  } else {
-    my_idx = team_latest_poses_idx_[id].first;
-    dst_idx = team_latest_poses_idx_[id].second;
+  // if (my_idx == team_latest_poses_idx_[id].first &&
+  //     dst_idx == team_latest_poses_idx_[id].second) {
+  //   // The relative pose is already calculated
+  //   relative_rotation_init = team_latest_relative_poses_[id].rotation();
+  //   relative_translation_init = team_latest_relative_poses_[id].translation();
+  // } else {
+  my_idx = team_latest_poses_idx_[id].first;
+  dst_idx = team_latest_poses_idx_[id].second;
 
-    // Safety check to ensure indices are valid
-    if (my_idx >= team_global_poses_[config_.my_id_].size() ||
-        dst_idx >= team_global_poses_[id].size()) {
-      ROS_ERROR("Invalid indices: my_idx=%zu (max=%zu), dst_idx=%zu (max=%zu)",
-                my_idx,
-                team_global_poses_[config_.my_id_].size() - 1,
-                dst_idx,
-                team_global_poses_[id].size() - 1);
-      return false;  // Skip this iteration to prevent segmentation fault
-    }
+  ROS_INFO("Meas time: %ld using robot %ld 's %ld and robot %ld 's %ld",
+           process_meas.first,
+           config_.my_id_,
+           team_global_poses_[config_.my_id_][my_idx].first,
+           id,
+           team_global_poses_[id][dst_idx].first);
+  ROS_INFO("Use robot %ld 's %ld (ID: %ld) and robot %ld 's %ld (ID: %ld)",
+           config_.my_id_,
+           team_latest_poses_idx_[id].first,
+           team_submap_ids_[config_.my_id_][team_latest_poses_idx_[id].first],
+           id,
+           team_latest_poses_idx_[id].second,
+           team_submap_ids_[id][team_latest_poses_idx_[id].second]);
+  // ros::Duration(5).sleep();
+
+  // Safety check to ensure indices are valid
+  if (my_idx >= team_global_poses_[config_.my_id_].size() ||
+      dst_idx >= team_global_poses_[id].size()) {
+    ROS_ERROR("Invalid indices: my_idx=%zu (max=%zu), dst_idx=%zu (max=%zu)",
+              my_idx,
+              team_global_poses_[config_.my_id_].size() - 1,
+              dst_idx,
+              team_global_poses_[id].size() - 1);
+    return false;  // Skip this iteration to prevent segmentation fault
+  }
 
   // Calculate initial relative pose using output parameters
   bool is_succeed_init = calculateInitialRelativePose(process_meas.first,
@@ -482,25 +524,26 @@ bool DistanceProcess::processSingleDistanceMeasurement(
   // team_latest_relative_poses_[id] =
   // gtsam::Pose3(relative_rotation_init, relative_translation_init);
 
-    // Create rotation objects only once and pass by reference
-    const auto& my_pose = team_global_poses_[config_.my_id_][my_idx].second;
-    const auto& dst_pose = team_global_poses_[id][dst_idx].second;
+  // Create rotation objects only once and pass by reference
+  const auto& my_pose = team_global_poses_[config_.my_id_][my_idx].second;
+  const auto& dst_pose = team_global_poses_[id][dst_idx].second;
 
-    // Convert quaternion to rotation for later use
-    gtsam::Rot3 rotation_my_T = gtsam::Rot3::Quaternion(my_pose.orientation.w,
-                                                        my_pose.orientation.x,
-                                                        my_pose.orientation.y,
-                                                        my_pose.orientation.z)
-                                    .inverse();
+  // Convert quaternion to rotation for later use
+  gtsam::Rot3 rotation_my_T = gtsam::Rot3::Quaternion(my_pose.orientation.w,
+                                                      my_pose.orientation.x,
+                                                      my_pose.orientation.y,
+                                                      my_pose.orientation.z)
+                                  .inverse();
 
-    gtsam::Rot3 rotation_dst = gtsam::Rot3::Quaternion(dst_pose.orientation.w,
-                                                       dst_pose.orientation.x,
-                                                       dst_pose.orientation.y,
-                                                       dst_pose.orientation.z);
+  gtsam::Rot3 rotation_dst = gtsam::Rot3::Quaternion(dst_pose.orientation.w,
+                                                     dst_pose.orientation.x,
+                                                     dst_pose.orientation.y,
+                                                     dst_pose.orientation.z);
 
-    oR_i_next.emplace(rotation_my_T);
-    oR_j_next.emplace(rotation_dst);
-  }
+  oR_i_next.emplace(rotation_my_T);
+  oR_j_next.emplace(rotation_dst);
+
+  // }
   // gtsam::Matrix covariance = Eigen::MatrixXd::Zero(6, 6);
 
   // Transform multiple relative distances into relative pose
@@ -556,8 +599,8 @@ bool DistanceProcess::processSingleDistanceMeasurement(
   //          Delta_t_i,
   //          Delta_t_j);
 
-  // Judge if interpolation is needed (threshold: 2ms = 2,000,000ns)
-  const int64_t INTERP_THRESHOLD_NS = 2000000;
+  // Judge if interpolation is needed (threshold: 5ms = 5,000,000ns)
+  const int64_t INTERP_THRESHOLD_NS = 5000000;
 
   if (delta_t_ri < INTERP_THRESHOLD_NS ||
       Delta_t_i - delta_t_ri < INTERP_THRESHOLD_NS) {
@@ -609,6 +652,17 @@ bool DistanceProcess::processSingleDistanceMeasurement(
   gtsam::Point3 Delta_tij = Delta_Ri_prev_r * Delta_Rij_r * Delta_tj_r_prev +
                             Delta_Ri_prev_r * Delta_tij_r + Delta_ti_prev_r;
 
+  // ROS_INFO_STREAM("Before tf: " << Delta_Rij_r.matrix() << " "
+  //                               << Delta_tij_r.transpose());
+  // ROS_INFO_STREAM("Delta Ri" << Delta_Ri_prev_r.matrix());
+  // ROS_INFO_STREAM("Delta Rj" << Delta_Rj_r_prev.matrix());
+  // ROS_INFO_STREAM("Delta ti and tj" << Delta_ti_prev_r.transpose() << " "
+  //                                   << Delta_tj_r_prev.transpose());
+  // ROS_INFO_STREAM("delta t" << delta_t_ri << " " << delta_t_rj << " " << Delta_t_i
+  //                           << " " << Delta_t_j);
+  // ROS_INFO_STREAM("Final pose transformation: " << Delta_Rij.matrix() << " "
+  //                                               << Delta_tij.transpose());
+  // ros::Duration(10).sleep();
   // Publish the pose graph edge
   publishPoseGraphEdge(id,
                        my_idx,
@@ -768,18 +822,23 @@ void DistanceProcess::interpolateSourcePose(size_t my_idx,
                                .inverse();
 
   // Use the passed rotation if available, otherwise create it
-  const gtsam::Rot3& R_i_next =
-      oR_i_next.value_or(gtsam::Rot3::Quaternion(current_pose.orientation.w,
-                                                 current_pose.orientation.x,
-                                                 current_pose.orientation.y,
-                                                 current_pose.orientation.z));
+  const gtsam::Rot3& R_i_next = gtsam::Rot3::Quaternion(current_pose.orientation.w,
+                                                        current_pose.orientation.x,
+                                                        current_pose.orientation.y,
+                                                        current_pose.orientation.z);
 
   // Calculate interpolation ratio once
+  if (Delta_t_i == 0) {
+    ROS_ERROR("Delta_t_i is zero, cannot calculate interpolation ratio.");
+    return;
+  }
   double ratio = static_cast<double>(delta_t_ri) / static_cast<double>(Delta_t_i);
 
   // Use Exponent map in gtsam to calculate the relative rotation
   Delta_Ri_prev_r =
       gtsam::Rot3::Expmap(gtsam::Rot3::Logmap(R_i_prev_T * R_i_next) * ratio);
+
+  ROS_INFO_STREAM("dR: " << R_i_prev_T * R_i_next);
 
   Delta_ti_prev_r = R_i_prev_T * (t_i_next - t_i_prev) * ratio;
 }
@@ -810,13 +869,16 @@ void DistanceProcess::interpolateDestPose(size_t dst_idx,
                                .inverse();
 
   // Use the passed rotation if available, otherwise create it
-  const gtsam::Rot3& R_j_next =
-      oR_j_next.value_or(gtsam::Rot3::Quaternion(current_pose.orientation.w,
-                                                 current_pose.orientation.x,
-                                                 current_pose.orientation.y,
-                                                 current_pose.orientation.z));
+  const gtsam::Rot3& R_j_next = gtsam::Rot3::Quaternion(current_pose.orientation.w,
+                                                        current_pose.orientation.x,
+                                                        current_pose.orientation.y,
+                                                        current_pose.orientation.z);
 
   // Calculate interpolation ratio onDelta_Ri_prev_rce
+  if (Delta_t_j == 0) {
+    ROS_ERROR("Delta_t_j is zero, cannot calculate interpolation ratio.");
+    return;
+  }
   double ratio = static_cast<double>(delta_t_rj) / static_cast<double>(Delta_t_j);
 
   Delta_Rj_r_prev =
@@ -846,7 +908,6 @@ void DistanceProcess::publishPoseGraphEdge(size_t id,
   edge_dis.key_from = team_submap_ids_[config_.my_id_][fin_idx_i];
   edge_dis.key_to = team_submap_ids_[id][fin_idx_j];
 
-  // TODO Use unique type like RELATIVEDISTANCE
   edge_dis.type = pose_graph_tools_msgs::PoseGraphEdge::UWB;
   const gtsam::Pose3 T_ij = gtsam::Pose3(Delta_Rij, Delta_tij);
   const auto T_si_i = RosPoseToGtsam(team_T_submap_kfs_[config_.my_id_][fin_idx_i]);
@@ -854,6 +915,7 @@ void DistanceProcess::publishPoseGraphEdge(size_t id,
   const auto T_si_sj = T_si_i * T_ij * (T_si_j.inverse());
 
   edge_dis.pose = GtsamPoseToRos(T_si_sj);  // Convert to ROS Pose message
+  edge_dis.number_edge_dis = count_ok_;
 
   ros::Time time_from_nsec(team_global_poses_[config_.my_id_][fin_idx_i].first / 1e9);
   edge_dis.stamp_from = time_from_nsec;
@@ -964,6 +1026,7 @@ void DistanceProcess::runDistanceProcessLoop() {
                 "for the next time",
                 id,
                 distance_queue.size());
+            team_latest_poses_idx_[id] = std::make_pair(0, 0);
             break;
           }
           // It means that this distance was processed but fail to use it
@@ -1018,6 +1081,8 @@ void DistanceProcess::runDistanceProcessLoop() {
         if (!success) {
           // ROS_ERROR("Cannot use this measurement. Keep it for the next time");
           distance_queue.push(process_meas);
+        } else {
+          ++count_ok_;
         }
         --dis_size;
         distance_queue.pop();
