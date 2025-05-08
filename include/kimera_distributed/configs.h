@@ -54,6 +54,7 @@ struct DistanceProcessConfig {
   size_t num_robots_;
   std::string frame_id_;
   std::map<size_t, std::string> robot_names_;
+  std::string gt_file_path_;
 };
 
 }  // namespace kimera_distributed

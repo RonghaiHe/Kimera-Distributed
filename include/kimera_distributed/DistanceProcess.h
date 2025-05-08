@@ -4,7 +4,7 @@
  * @Author: Ronghai He
  * @Date: 2025-04-03 15:33:59
  * @LastEditors: RonghaiHe hrhkjys@qq.com
- * @LastEditTime: 2025-04-15 15:36:25
+ * @LastEditTime: 2025-04-17 14:50:31
  * @FilePath: /src/kimera_distributed/include/kimera_distributed/DistanceProcess.h
  * @Version:
  * @Description:
@@ -64,6 +64,19 @@ class DistanceProcess {
 
   std::unique_ptr<std::thread> process_thread_;
 
+  uint64_t count_ok_;
+
+  std::ifstream gt_file_;
+  std::vector<std::vector<uint64_t>> timestamp_gt_;
+  std::vector<std::vector<gtsam::Pose3>> pose_gt_;
+
+  void readGTFile(const std::string& gt_file_path);
+
+  void interpolatePose(double ratio_time,
+                       gtsam::Pose3& pose_prev,
+                       gtsam::Pose3& pose_next,
+                       gtsam::Pose3& pose_curr);
+
   void DistanceCallback(const pose_graph_tools_msgs::UWBFrameConstPtr& msg);
 
   /**
@@ -106,7 +119,8 @@ class DistanceProcess {
    * @param[out] relative_rotation_init Output relative rotation
    * @param[out] relative_translation_init Output relative translation
    */
-  void calculateInitialRelativePose(size_t my_idx,
+  bool calculateInitialRelativePose(uint64_t ts_meas,
+                                    size_t my_idx,
                                     size_t dst_idx,
                                     size_t id,
                                     gtsam::Rot3& relative_rotation_init,

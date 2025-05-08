@@ -76,6 +76,18 @@ DistanceProcess::DistanceProcess(const ros::NodeHandle& n) : nh_(n) {
   pose_graph_dis_pub_ =
       nh_.advertise<pose_graph_tools_msgs::PoseGraph>(pose_graph_dis_topic, 1000, true);
 
+  count_ok_ = 0;
+
+  ros::param::get("~gt_file_path", config_.gt_file_path_);
+  timestamp_gt_.resize(config_.num_robots_);
+  pose_gt_.resize(config_.num_robots_);
+  // Read GT file from outside
+  if (config_.gt_file_path_.empty()) {
+    ROS_WARN("No GT file path provided. Distance process will not read GT.");
+  } else {
+    readGTFile(config_.gt_file_path_);
+  }
+
   process_thread_.reset(
       new std::thread(&DistanceProcess::runDistanceProcessLoop, this));
   ROS_INFO("Robot %zu started distance process thread.", config_.my_id_);
@@ -85,6 +97,61 @@ DistanceProcess::~DistanceProcess() {
   if (process_thread_) {
     process_thread_->join();
     process_thread_.reset();
+  }
+}
+
+void DistanceProcess::readGTFile(const std::string& gt_file_path) {
+  std::string gt_file_name;
+
+  for (size_t i = 0; i < config_.num_robots_; i++) {
+    gt_file_name =
+        gt_file_path + "modified_" + config_.robot_names_[i] + "_gt_odom.tum";
+
+    // Use gt_file_ to read GT file.
+    gt_file_.open(gt_file_name);
+    if (!gt_file_.is_open()) {
+      ROS_ERROR("Failed to open GT file %s.", gt_file_name.c_str());
+      return;
+    }
+
+    std::string line;
+    // Format: #timestamp_kf x y z qx qy qz qw
+    while (std::getline(gt_file_, line)) {
+      if (line.empty() || line[0] == '#') {
+        // Skip empty lines and comment lines
+        continue;
+      }
+
+      std::istringstream iss(line);
+      double timestamp, x, y, z, qx, qy, qz, qw;
+
+      if (!(iss >> timestamp >> x >> y >> z >> qx >> qy >> qz >> qw)) {
+        ROS_WARN("Failed to parse ground truth line: %s", line.c_str());
+        continue;
+      }
+
+      // Create a pose from the parsed ground truth data
+      gtsam::Pose3 gt_pose =
+          gtsam::Pose3(gtsam::Rot3::Quaternion(qw, qx, qy, qz), gtsam::Point3(x, y, z));
+
+      // Convert timestamp to uint64_t (nanoseconds)
+      uint64_t timestamp_ns = static_cast<uint64_t>(timestamp * 1e9);
+
+      // Initialize vectors for the first robot if they're empty
+      if (timestamp_gt_.empty() || pose_gt_.empty()) {
+        timestamp_gt_.resize(config_.num_robots_);
+        pose_gt_.resize(config_.num_robots_);
+      }
+
+      // Store the ground truth timestamp and pose for the current robot
+      timestamp_gt_[i].emplace_back(timestamp_ns);
+      pose_gt_[i].emplace_back(gt_pose);
+    }
+    ROS_INFO("Finished loading ground truth data with %zu poses for robot %zu.",
+             timestamp_gt_[i].size(),
+             i);
+    // Close the file before opening it for the next robot
+    gt_file_.close();
   }
 }
 
@@ -400,11 +467,20 @@ bool DistanceProcess::processSingleDistanceMeasurement(
       return false;  // Skip this iteration to prevent segmentation fault
     }
 
-    // Calculate initial relative pose using output parameters
-    calculateInitialRelativePose(
-        my_idx, dst_idx, id, relative_rotation_init, relative_translation_init);
-    team_latest_relative_poses_[id] =
-        gtsam::Pose3(relative_rotation_init, relative_translation_init);
+  // Calculate initial relative pose using output parameters
+  bool is_succeed_init = calculateInitialRelativePose(process_meas.first,
+                                                      my_idx,
+                                                      dst_idx,
+                                                      id,
+                                                      relative_rotation_init,
+                                                      relative_translation_init);
+
+  if (!is_succeed_init) {
+    return false;
+  }
+
+  // team_latest_relative_poses_[id] =
+  // gtsam::Pose3(relative_rotation_init, relative_translation_init);
 
     // Create rotation objects only once and pass by reference
     const auto& my_pose = team_global_poses_[config_.my_id_][my_idx].second;
@@ -546,37 +622,125 @@ bool DistanceProcess::processSingleDistanceMeasurement(
   return true;
 }
 
-void DistanceProcess::calculateInitialRelativePose(
+bool DistanceProcess::calculateInitialRelativePose(
+    uint64_t ts_meas,
     size_t my_idx,
     size_t dst_idx,
     size_t id,
     gtsam::Rot3& relative_rotation_init,
     gtsam::Point3& relative_translation_init) {
   // Get references to the pose data to avoid repeated lookups
-  const auto& my_pose = team_global_poses_[config_.my_id_][my_idx].second;
-  const auto& dst_pose = team_global_poses_[id][dst_idx].second;
+  // const auto& my_pose = team_global_poses_[config_.my_id_][my_idx].second;
+  // const auto& dst_pose = team_global_poses_[id][dst_idx].second;
 
-  // Transform the quaternion to rotation matrix
-  gtsam::Rot3 rotation_my_T = gtsam::Rot3::Quaternion(my_pose.orientation.w,
-                                                      my_pose.orientation.x,
-                                                      my_pose.orientation.y,
-                                                      my_pose.orientation.z)
-                                  .inverse();
+  // // Transform the quaternion to rotation matrix
+  // gtsam::Rot3 rotation_my_T = gtsam::Rot3::Quaternion(my_pose.orientation.w,
+  //                                                     my_pose.orientation.x,
+  //                                                     my_pose.orientation.y,
+  //                                                     my_pose.orientation.z)
+  //                                 .inverse();
 
-  gtsam::Rot3 rotation_dst = gtsam::Rot3::Quaternion(dst_pose.orientation.w,
-                                                     dst_pose.orientation.x,
-                                                     dst_pose.orientation.y,
-                                                     dst_pose.orientation.z);
+  // gtsam::Rot3 rotation_dst = gtsam::Rot3::Quaternion(dst_pose.orientation.w,
+  //                                                    dst_pose.orientation.x,
+  //                                                    dst_pose.orientation.y,
+  //                                                    dst_pose.orientation.z);
 
-  relative_rotation_init = rotation_my_T * rotation_dst;
+  // relative_rotation_init = rotation_my_T * rotation_dst;
 
-  // Use direct reference to position data
-  gtsam::Point3 dst_position(
-      dst_pose.position.x, dst_pose.position.y, dst_pose.position.z);
+  // // Use direct reference to position data
+  // gtsam::Point3 dst_position(
+  //     dst_pose.position.x, dst_pose.position.y, dst_pose.position.z);
 
-  gtsam::Point3 my_position(my_pose.position.x, my_pose.position.y, my_pose.position.z);
+  // gtsam::Point3 my_position(my_pose.position.x, my_pose.position.y,
+  // my_pose.position.z);
 
-  relative_translation_init = rotation_my_T * (dst_position - my_position);
+  // relative_translation_init = rotation_my_T * (dst_position - my_position);
+  // return true;
+
+  // const uint64_t ts_src = team_global_poses_[config_.my_id_][my_idx].first;
+  // const uint64_t ts_dst = team_global_poses_[id][dst_idx].first;
+
+  // uint64_t ts_src, ts_dst;
+  auto it_src = std::lower_bound(timestamp_gt_[config_.my_id_].begin(),
+                                 timestamp_gt_[config_.my_id_].end(),
+                                 ts_meas);
+  const uint64_t ts_next_src = *it_src;
+  if (it_src == timestamp_gt_[config_.my_id_].begin()) {
+    ROS_ERROR("Cannot find the pose of the robot %ld at %lu", config_.my_id_, ts_meas);
+    return false;
+  }
+  size_t idx_src = std::distance(timestamp_gt_[config_.my_id_].begin(), it_src);
+  const uint64_t ts_prev_src = timestamp_gt_[config_.my_id_][idx_src - 1];
+  auto it_dst =
+      std::lower_bound(timestamp_gt_[id].begin(), timestamp_gt_[id].end(), ts_meas);
+  const uint64_t ts_next_dst = *it_dst;
+  if (it_dst == timestamp_gt_[id].begin()) {
+    ROS_ERROR("Cannot find the pose of the robot %ld at %lu", id, ts_meas);
+    return false;
+  }
+  size_t idx_dst = std::distance(timestamp_gt_[id].begin(), it_dst);
+  if (idx_dst == 0) {
+    ROS_ERROR("Index out of bounds for robot %ld at %lu", id, ts_meas);
+    return false;
+  }
+  const uint64_t ts_prev_dst = timestamp_gt_[id][idx_dst - 1];
+  if (it_dst == timestamp_gt_[id].begin()) {
+    ROS_ERROR("Cannot find the pose of the robot %ld at %lu", id, ts_next_dst);
+    return false;
+  }
+
+  ROS_INFO("Use GT pose at %lu for robot %ld and %lu for robot %ld",
+           ts_prev_src,
+           config_.my_id_,
+           ts_prev_dst,
+           id);
+
+  gtsam::Pose3 pose_src, pose_dst, pose_src_dst;
+
+  const double ratio_src = (ts_meas - ts_prev_src) / (ts_next_src - ts_prev_src);
+  interpolatePose(ratio_src,
+                  pose_gt_[config_.my_id_][idx_src - 1],
+                  pose_gt_[config_.my_id_][idx_src],
+                  pose_src);
+
+  const double ratio_dst = (ts_meas - ts_prev_dst) / (ts_next_dst - ts_prev_dst);
+  interpolatePose(
+      ratio_dst, pose_gt_[id][idx_dst - 1], pose_gt_[id][idx_dst], pose_dst);
+
+  relative_rotation_init = pose_src.rotation().inverse() * pose_dst.rotation();
+  relative_translation_init =
+      pose_src.rotation().inverse() * (pose_dst.translation() - pose_src.translation());
+
+  relative_rotation_init =
+      relative_rotation_init * gtsam::Rot3::Expmap(gtsam::Vector3(0, 0, 0.01));
+  relative_translation_init = relative_translation_init + gtsam::Vector3(0, 0, 0.01);
+  // ROS_INFO_STREAM("Relative pose initialization: "
+  //                 << relative_rotation_init.matrix() << std::endl
+  //                 << relative_translation_init.transpose());
+  ROS_INFO("Complete relative pose initialization.");
+  return true;
+}
+
+void DistanceProcess::interpolatePose(double ratio_time,
+                                      gtsam::Pose3& pose_prev,
+                                      gtsam::Pose3& pose_next,
+                                      gtsam::Pose3& pose_curr) {
+  // Use Exponent map in gtsam to calculate the relative rotation
+  gtsam::Rot3 R_curr =
+      pose_prev.rotation() *
+      gtsam::Rot3::Expmap(
+          gtsam::Rot3::Logmap(pose_prev.rotation().inverse() * pose_next.rotation()) *
+          ratio_time);
+
+  gtsam::Point3 t_prev = pose_prev.translation();
+  gtsam::Point3 t_next = pose_next.translation();
+  gtsam::Point3 t_curr = t_prev + (t_next - t_prev) * ratio_time;
+
+  // Set the interpolated pose
+  pose_curr = gtsam::Pose3(R_curr, t_curr);
+  // ROS_INFO_STREAM("Interpolating pose between " << pose_prev << " and " <<
+  // pose_next); ROS_INFO_STREAM("Interpolated pose: " << pose_curr);
+  // ros::Duration(5).sleep();
 }
 
 void DistanceProcess::interpolateSourcePose(size_t my_idx,
