@@ -826,8 +826,8 @@ pose_graph_tools_msgs::PoseGraph DistributedLoopClosure::getSubmapPoseGraph(
   if (config_.use_uwb_) {
     // TODO(RonghaiHe) To judge if use incremental or not, and add the judgement for
     // redundant detection
-    // size_t start_idx = incremental ? last_get_uwb_idx_ : 0;
-    size_t start_idx = last_get_uwb_idx_;
+    size_t start_idx = incremental ? last_get_uwb_idx_ : 0;
+    // size_t start_idx = last_get_uwb_idx_;
     size_t end_idx = submap_uwb_.size();
     for (size_t submap_uwb_id = start_idx; submap_uwb_id < end_idx; ++submap_uwb_id) {
       // check if between factor
@@ -1072,6 +1072,7 @@ void DistributedLoopClosure::createLogFiles() {
   std::string inter_lc_file_path = config_.log_output_dir_ + "loop_closures.csv";
   std::string lcd_file_path = config_.log_output_dir_ + "lcd_log.csv";
   std::string uwb_file_path = config_.log_output_dir_ + "uwb_log.csv";
+  std::string lc_pg_file_path = config_.log_output_dir_ + "pgo_lc.csv";
 
   odometry_file_.open(pose_file_path);
   if (!odometry_file_.is_open())
@@ -1109,6 +1110,13 @@ void DistributedLoopClosure::createLogFiles() {
          "tx_dis,ty_dis,tz_dis,dis0,dis1,dis2,dis3,dis4,"
          "dis5,dis6,dis7,dis8\n";
   uwb_log_file_.flush();
+
+  pg_lc_log_file_.open(lc_pg_file_path);
+  if (!pg_lc_log_file_.is_open())
+    LOG(ERROR) << "Error opening log file: " << lc_pg_file_path;
+  pg_lc_log_file_ << std::fixed << std::setprecision(15);
+  pg_lc_log_file_ << "robot1,submap1,robot2,submap2,qx,qy,qz,qw,tx,ty,tz\n";
+  pg_lc_log_file_.flush();
 }
 
 void DistributedLoopClosure::closeLogFiles() {
